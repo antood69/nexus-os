@@ -4,8 +4,9 @@ import {
   Cpu, Plus, Trash2, Download, Sparkles, Code, Globe, LayoutDashboard, Server,
   FolderTree, FileCode, FileJson, FileText, ChevronRight, ChevronDown,
   Play, Send, Terminal, MessageSquare, X, Package, Loader2, Copy, Check,
-  Smartphone, Zap, PanelLeft, PanelBottom
+  Smartphone, Zap, PanelLeft, PanelBottom, Eye, History
 } from "lucide-react";
+import JSZip from "jszip";
 import { Button } from "@/components/ui/button";
 import { apiRequest } from "@/lib/queryClient";
 import ModelSelector from "@/components/ModelSelector";
@@ -20,6 +21,7 @@ type GeneratedApp = {
   previewUrl: string | null;
   status: string;
   createdAt: string;
+  versions?: string;
 };
 
 // ── File tree types ──────────────────────────────────────────────────────────
@@ -63,7 +65,9 @@ const TEMPLATES = [
 function parseCodeToFileTree(code: string, framework: string): FileNode[] {
   // Try to split by file markers like "// === filename.tsx ===" or "/* --- filename.css --- */"
   const filePattern = /(?:\/\/|\/\*|#)\s*={3,}\s*(.+?)\s*={3,}\s*(?:\*\/)?/g;
-  const matches = [...code.matchAll(filePattern)];
+  const matches: RegExpExecArray[] = [];
+  let match: RegExpExecArray | null;
+  while ((match = filePattern.exec(code)) !== null) matches.push(match);
 
   if (matches.length >= 2) {
     const files: FileNode[] = [];
@@ -190,6 +194,9 @@ export default function AppGeneratorPage() {
   const [showTerminal, setShowTerminal] = useState(true);
   const [showChat, setShowChat] = useState(true);
   const [copied, setCopied] = useState(false);
+  const [showPreview, setShowPreview] = useState(false);
+  const [previewUrl, setPreviewUrl] = useState<string | null>(null);
+  const [versions, setVersions] = useState<{ code: string; timestamp: string; version: number }[]>([]);
   const chatEndRef = useRef<HTMLDivElement>(null);
   const terminalEndRef = useRef<HTMLDivElement>(null);
 
@@ -253,6 +260,10 @@ export default function AppGeneratorPage() {
       setFileContent("");
     }
     setChatMessages([{ role: "assistant", content: `Project "${app.name}" loaded. ${app.status === "draft" ? "Click Generate to create the code, or describe what you want." : "You can ask me to modify any file."}` }]);
+    // Load versions
+    try { setVersions(app.versions ? JSON.parse(app.versions) : []); } catch { setVersions([]); }
+    setShowPreview(false);
+    setPreviewUrl(null);
   }
 
   function findFirstFile(nodes: FileNode[]): FileNode | null {
@@ -283,15 +294,62 @@ export default function AppGeneratorPage() {
     setTimeout(() => setCopied(false), 2000);
   }
 
-  function downloadAll() {
+  async function downloadAll() {
     if (!activeApp?.generatedCode) return;
-    const blob = new Blob([activeApp.generatedCode], { type: "text/plain" });
+    const zip = new JSZip();
+    const tree = parseCodeToFileTree(activeApp.generatedCode, activeApp.framework);
+    function addToZip(nodes: FileNode[], prefix = "") {
+      for (const node of nodes) {
+        const path = prefix ? `${prefix}/${node.name}` : node.name;
+        if (node.type === "folder" && node.children) {
+          addToZip(node.children, path);
+        } else if (node.content) {
+          zip.file(path, node.content);
+        }
+      }
+    }
+    addToZip(tree);
+    const blob = await zip.generateAsync({ type: "blob" });
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a");
     a.href = url;
     a.download = `${(activeApp.name || "app").toLowerCase().replace(/\s+/g, "-")}.zip`;
     a.click();
     URL.revokeObjectURL(url);
+  }
+
+  function buildPreview() {
+    if (!activeApp?.generatedCode) return;
+    const tree = parseCodeToFileTree(activeApp.generatedCode, activeApp.framework);
+    // Find index.html or build one from the code
+    function findFile(nodes: FileNode[], name: string): FileNode | null {
+      for (const n of nodes) {
+        if (n.type === "file" && n.name.toLowerCase() === name) return n;
+        if (n.children) { const f = findFile(n.children, name); if (f) return f; }
+      }
+      return null;
+    }
+    const html = findFile(tree, "index.html");
+    let previewHtml = "";
+    if (html?.content) {
+      previewHtml = html.content;
+    } else {
+      // Wrap all code in a basic HTML page
+      const allCode = activeApp.generatedCode;
+      previewHtml = `<!DOCTYPE html><html><head><style>body{font-family:system-ui;padding:20px;background:#1e1e2e;color:#cdd6f4;}</style></head><body><pre>${allCode.replace(/</g,"&lt;").replace(/>/g,"&gt;")}</pre></body></html>`;
+    }
+    if (previewUrl) URL.revokeObjectURL(previewUrl);
+    const blob = new Blob([previewHtml], { type: "text/html" });
+    setPreviewUrl(URL.createObjectURL(blob));
+    setShowPreview(true);
+  }
+
+  function loadVersion(v: { code: string; timestamp: string; version: number }) {
+    if (!activeApp) return;
+    const tree = parseCodeToFileTree(v.code, activeApp.framework);
+    setFileTree(tree);
+    const first = findFirstFile(tree);
+    if (first) { setSelectedFile(first.name); setFileContent(first.content || ""); }
   }
 
   // ── Gallery View ───────────────────────────────────────────────────────────
@@ -445,7 +503,29 @@ export default function AppGeneratorPage() {
               Regenerate
             </Button>
           )}
-          <button onClick={downloadAll} className="p-1.5 rounded hover:bg-[#313244] text-[#a6adc8]" title="Download">
+          {activeApp?.status === "generated" && (
+            <button onClick={buildPreview} className={`p-1.5 rounded hover:bg-[#313244] ${showPreview ? "text-[#89b4fa]" : "text-[#a6adc8]"}`} title="Preview">
+              <Eye className="w-3.5 h-3.5" />
+            </button>
+          )}
+          {versions.length > 0 && (
+            <div className="relative group">
+              <button className="p-1.5 rounded hover:bg-[#313244] text-[#a6adc8] flex items-center gap-1" title="Versions">
+                <History className="w-3.5 h-3.5" />
+                <span className="text-[10px]">v{versions.length}</span>
+              </button>
+              <div className="absolute right-0 top-8 bg-[#181825] border border-[#313244] rounded-lg shadow-xl z-50 min-w-[180px] hidden group-hover:block">
+                {versions.map(v => (
+                  <button key={v.version} onClick={() => loadVersion(v)}
+                    className="w-full text-left px-3 py-2 text-xs text-[#cdd6f4] hover:bg-[#313244] flex justify-between">
+                    <span>Version {v.version}</span>
+                    <span className="text-[#6c7086]">{new Date(v.timestamp).toLocaleDateString()}</span>
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
+          <button onClick={downloadAll} className="p-1.5 rounded hover:bg-[#313244] text-[#a6adc8]" title="Download ZIP">
             <Download className="w-3.5 h-3.5" />
           </button>
           <button onClick={() => setShowTerminal(!showTerminal)} className={`p-1.5 rounded hover:bg-[#313244] ${showTerminal ? "text-[#89b4fa]" : "text-[#a6adc8]"}`} title="Terminal">
@@ -513,6 +593,21 @@ export default function AppGeneratorPage() {
               </div>
             )}
           </div>
+
+          {/* Live Preview */}
+          {showPreview && previewUrl && (
+            <div className="h-64 bg-white border-t border-[#313244] flex-shrink-0 overflow-hidden flex flex-col">
+              <div className="flex items-center justify-between h-7 px-3 bg-[#181825] border-b border-[#313244] flex-shrink-0">
+                <div className="flex items-center gap-1.5 text-[10px] text-[#a6adc8]">
+                  <Eye className="w-3 h-3" /> Preview
+                </div>
+                <button onClick={() => setShowPreview(false)} className="p-0.5 hover:bg-[#313244] rounded">
+                  <X className="w-3 h-3 text-[#6c7086]" />
+                </button>
+              </div>
+              <iframe src={previewUrl} className="flex-1 w-full bg-white" sandbox="allow-scripts allow-same-origin" title="App Preview" />
+            </div>
+          )}
 
           {/* Terminal */}
           {showTerminal && (

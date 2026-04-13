@@ -416,7 +416,7 @@ export default function BossPage() {
       const res = await fetch("/api/jarvis/chat", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ message: trimmed, history }),
+        body: JSON.stringify({ message: trimmed, history, ...(selectedModel ? { provider: selectedModel.provider, model: selectedModel.model } : {}) }),
       });
 
       if (!res.ok) {

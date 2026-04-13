@@ -337,15 +337,25 @@ export async function registerRoutes(
 
   // === JARVIS CHAT ===
   app.post("/api/jarvis/chat", async (req, res) => {
-    const { message, context, history } = req.body as { message: string; context?: string; history?: { role: "user" | "assistant"; content: string }[] };
+    const { message, context, history, provider, model } = req.body as { message: string; context?: string; history?: { role: "user" | "assistant"; content: string }[]; provider?: string; model?: string };
     if (!message) return res.status(400).json({ error: "message required" });
 
     const systemPrompt = `You are The Boss, the AI brain behind Bunz. You're sharp, efficient, and a little cocky — like a founder who's been through it. Help users build workflows, create agents, understand their data, and ship faster. Keep it real, keep it brief, and always push toward action.`;
 
     try {
-      const { runAgentChat } = await import("./ai");
+      const { runAgentChat, runAgentChatWithUserKey } = await import("./ai");
       const chatHistory = Array.isArray(history) ? history : [];
-      const { reply, inputTokens, outputTokens, totalTokens } = await runAgentChat("claude-sonnet", systemPrompt, chatHistory, message);
+
+      let aiModel = "claude-sonnet";
+      let userKeyId: string | undefined;
+      if (provider && model) {
+        const userId = req.user?.id || 1;
+        const keys = await storage.getUserApiKeys(userId);
+        const key = keys.find(k => k.provider === provider && k.isActive);
+        if (key) { userKeyId = key.id; aiModel = model; }
+      }
+
+      const { reply, inputTokens, outputTokens, totalTokens } = await runAgentChatWithUserKey(aiModel, systemPrompt, chatHistory, message, userKeyId);
 
       const jarvisUserId = req.user?.id || 1;
       await storage.recordTokenUsage({
@@ -1037,10 +1047,18 @@ export async function registerRoutes(
     const bot = await storage.getTradingBot(req.params.id);
     if (!bot || bot.userId !== userId) return res.status(404).json({ error: "Not found" });
     try {
-      const { runAgentChat } = await import("./ai");
+      const { runAgentChatWithUserKey } = await import("./ai");
+      const { provider, model } = req.body || {};
+      let aiModel = "claude-sonnet";
+      let userKeyId: string | undefined;
+      if (provider && model) {
+        const keys = await storage.getUserApiKeys(userId);
+        const key = keys.find(k => k.provider === provider && k.isActive);
+        if (key) { userKeyId = key.id; aiModel = model; }
+      }
       const systemPrompt = `You are an expert algorithmic trading strategy designer. Given a trading strategy description, generate specific: indicators (technical indicators to use), entry_rules (when to enter a trade), exit_rules (when to exit a trade), and risk_rules (position sizing, stop losses). Format your response as JSON with keys: indicators, entryRules, exitRules, riskRules. Each should be a clear, actionable string.`;
       const prompt = `Strategy: ${bot.name}\nDescription: ${bot.description || 'No description'}\nTimeframe: ${bot.timeframe}\nSymbols: ${bot.symbols}\n\nGenerate trading rules for this strategy.`;
-      const { reply } = await runAgentChat("claude-sonnet", systemPrompt, [], prompt);
+      const { reply } = await runAgentChatWithUserKey(aiModel, systemPrompt, [], prompt, userKeyId);
       let parsed: any = {};
       try {
         const jsonMatch = reply.match(/\{[\s\S]*\}/);
@@ -1151,10 +1169,18 @@ export async function registerRoutes(
     if (!order || order.userId !== userId) return res.status(404).json({ error: "Not found" });
     const gig = await storage.getFiverrGig(order.gigId);
     try {
-      const { runAgentChat } = await import("./ai");
+      const { runAgentChatWithUserKey } = await import("./ai");
+      const { provider, model } = req.body || {};
+      let aiModel = gig?.aiModel || "claude-sonnet";
+      let userKeyId: string | undefined;
+      if (provider && model) {
+        const keys = await storage.getUserApiKeys(userId);
+        const key = keys.find(k => k.provider === provider && k.isActive);
+        if (key) { userKeyId = key.id; aiModel = model; }
+      }
       const systemPrompt = `You are a professional freelancer completing a Fiverr order. Generate a high-quality deliverable draft based on the gig description and buyer requirements. Be thorough and professional.`;
       const prompt = `Gig: ${gig?.title || 'Freelance work'}\nGig Description: ${gig?.description || 'N/A'}\nBuyer Requirements: ${order.requirements || 'No specific requirements'}\n\nGenerate the deliverable.`;
-      const { reply } = await runAgentChat(gig?.aiModel || "claude-sonnet", systemPrompt, [], prompt);
+      const { reply } = await runAgentChatWithUserKey(aiModel, systemPrompt, [], prompt, userKeyId);
       const updated = await storage.updateFiverrOrder(req.params.id, { aiDraft: reply, status: 'draft_ready' } as any);
       res.json(updated);
     } catch (err: any) {
@@ -1163,12 +1189,42 @@ export async function registerRoutes(
   });
 
   // ── Jarvis Voice ──────────────────────────────────────────────────────────
-  app.post("/api/jarvis/tts", async (_req, res) => {
-    res.json({ audioUrl: null, message: "TTS placeholder — integration pending" });
+  app.post("/api/jarvis/tts", async (req, res) => {
+    const { text, voice } = req.body;
+    if (!text) return res.status(400).json({ error: "text required" });
+
+    const voiceMap: Record<string, string> = {
+      jarvis: "onyx", nova: "nova", echo: "echo", sage: "shimmer", atlas: "fable",
+    };
+
+    try {
+      const openai = new (await import("openai")).default({ apiKey: process.env.OPENAI_API_KEY });
+      const mp3 = await openai.audio.speech.create({
+        model: "tts-1",
+        voice: (voiceMap[voice || "jarvis"] || "onyx") as any,
+        input: text,
+      });
+      const buffer = Buffer.from(await mp3.arrayBuffer());
+      res.set({ "Content-Type": "audio/mpeg", "Content-Length": String(buffer.length) });
+      res.send(buffer);
+    } catch (err: any) {
+      res.json({ audioUrl: null, error: err.message });
+    }
   });
 
-  app.post("/api/jarvis/stt", async (_req, res) => {
-    res.json({ transcript: null, message: "STT placeholder — integration pending" });
+  app.post("/api/jarvis/stt", async (req, res) => {
+    const { audio } = req.body;
+    if (!audio) return res.status(400).json({ error: "audio required" });
+
+    try {
+      const openai = new (await import("openai")).default({ apiKey: process.env.OPENAI_API_KEY });
+      const buffer = Buffer.from(audio, "base64");
+      const file = new File([buffer], "audio.webm", { type: "audio/webm" });
+      const transcription = await openai.audio.transcriptions.create({ model: "whisper-1", file });
+      res.json({ transcript: transcription.text });
+    } catch (err: any) {
+      res.json({ transcript: null, error: err.message });
+    }
   });
 
   app.get("/api/jarvis/voices", async (_req, res) => {
@@ -1222,11 +1278,24 @@ export async function registerRoutes(
     const app_ = await storage.getGeneratedApp(req.params.id);
     if (!app_ || app_.userId !== userId) return res.status(404).json({ error: "Not found" });
     try {
-      const { runAgentChat } = await import("./ai");
-      const systemPrompt = `You are an expert app developer. Generate complete, working code for the described application. Return clean, well-structured code with comments. Use the specified framework.`;
+      const { runAgentChatWithUserKey } = await import("./ai");
+      const { provider, model } = req.body || {};
+      let aiModel = "claude-sonnet";
+      let userKeyId: string | undefined;
+      if (provider && model) {
+        const keys = await storage.getUserApiKeys(userId);
+        const key = keys.find(k => k.provider === provider && k.isActive);
+        if (key) { userKeyId = key.id; aiModel = model; }
+      }
+      const systemPrompt = `You are an expert app developer. Generate complete, working code for the described application. Return clean, well-structured code with comments. Use the specified framework. Use file markers like "// === filename.ext ===" to separate files.`;
       const prompt = `App: ${app_.name}\nDescription: ${app_.description || 'No description'}\nFramework: ${app_.framework}\nApp Type: ${app_.appType}\n\nGenerate the complete app code.`;
-      const { reply } = await runAgentChat("claude-sonnet", systemPrompt, [], prompt);
-      const updated = await storage.updateGeneratedApp(req.params.id, { generatedCode: reply, status: 'generated' } as any);
+      const { reply } = await runAgentChatWithUserKey(aiModel, systemPrompt, [], prompt, userKeyId);
+
+      // Save version snapshot
+      let versions: any[] = [];
+      try { if (app_.versions) versions = JSON.parse(app_.versions); } catch {}
+      versions.push({ code: reply, timestamp: new Date().toISOString(), version: versions.length + 1 });
+      const updated = await storage.updateGeneratedApp(req.params.id, { generatedCode: reply, status: 'generated', versions: JSON.stringify(versions) } as any);
       res.json(updated);
     } catch (err: any) {
       res.status(500).json({ error: err.message });
@@ -1303,6 +1372,74 @@ export async function registerRoutes(
     if (!account || account.userId !== userId) return res.status(404).json({ error: "Not found" });
     await storage.deletePropAccount(req.params.id);
     res.json({ ok: true });
+  });
+
+  // ── Activity Feed (Dashboard) ────────────────────────────────────────────
+  app.get("/api/activity-feed", async (req, res) => {
+    try {
+      const userId = req.user?.id || 1;
+      const trades = await storage.getTradesByUser(userId, { limit: 5 });
+      const bots = await storage.getTradingBots(userId);
+      const orders = await storage.getFiverrOrders(userId);
+      const apps = await storage.getGeneratedApps(userId);
+      const deployments = await storage.getBotDeployments(userId);
+      const keys = await storage.getUserApiKeys(userId);
+      const brokers = await storage.getBrokerConnections(userId);
+
+      res.json({
+        recentTrades: trades.slice(0, 5),
+        activeBots: bots.filter((b: any) => b.status === "generated" || b.status === "running").length,
+        openOrders: orders.filter((o: any) => o.status === "pending").length,
+        totalApps: apps.length,
+        activeDeployments: deployments.filter((d: any) => d.status === "running").length,
+        connectedProviders: keys.filter((k: any) => k.isActive).length,
+        connectedBrokers: brokers.filter((b: any) => b.isActive).length,
+        totalBots: bots.length,
+      });
+    } catch (err: any) {
+      res.status(500).json({ error: err.message });
+    }
+  });
+
+  // ── Account Stack Execution ──────────────────────────────────────────────
+  app.post("/api/account-stacks/:id/execute", async (req, res) => {
+    const userId = req.user?.id || 1;
+    const stack = await storage.getAccountStack(req.params.id);
+    if (!stack) return res.status(404).json({ error: "Stack not found" });
+
+    const { symbol, side, quantity, price } = req.body;
+    const results: any[] = [];
+    const followers = await storage.getStackFollowers(stack.id);
+
+    for (const follower of followers) {
+      const adjQty = quantity * (follower.sizeMultiplier || 1);
+      const logEntry = {
+        id: require("uuid").v4(),
+        stackId: stack.id,
+        connectionId: follower.connectionId,
+        symbol: symbol || "N/A",
+        side: side || "buy",
+        quantity: adjQty,
+        price: price || 0,
+        status: follower.isActive ? "filled" : "skipped",
+        executedAt: new Date().toISOString(),
+      };
+      try {
+        storage.addStackExecutionLog(logEntry);
+      } catch {}
+      results.push(logEntry);
+    }
+
+    res.json({ executions: results });
+  });
+
+  app.get("/api/account-stacks/:id/executions", async (req, res) => {
+    try {
+      const logs = storage.getStackExecutionLogs(req.params.id);
+      res.json(logs);
+    } catch (err: any) {
+      res.status(500).json({ error: err.message });
+    }
   });
 
   return httpServer;

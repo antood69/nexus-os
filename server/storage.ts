@@ -528,6 +528,26 @@ safeAlter("ALTER TABLE users ADD COLUMN role TEXT NOT NULL DEFAULT 'user'");
 safeAlter("ALTER TABLE users ADD COLUMN email_verified INTEGER NOT NULL DEFAULT 0");
 safeAlter("ALTER TABLE users ADD COLUMN last_login_at TEXT");
 safeAlter("ALTER TABLE users ADD COLUMN created_at TEXT NOT NULL DEFAULT ''");
+// Generated apps version tracking
+safeAlter("ALTER TABLE generated_apps ADD COLUMN versions TEXT");
+
+// Stack execution log table
+try {
+  sqlite.exec(`
+    CREATE TABLE IF NOT EXISTS stack_execution_log (
+      id TEXT PRIMARY KEY,
+      stack_id TEXT NOT NULL,
+      connection_id TEXT NOT NULL,
+      symbol TEXT NOT NULL,
+      side TEXT NOT NULL,
+      quantity REAL NOT NULL DEFAULT 0,
+      price REAL NOT NULL DEFAULT 0,
+      status TEXT NOT NULL DEFAULT 'pending',
+      executed_at TEXT DEFAULT (datetime('now'))
+    );
+  `);
+} catch (_) {}
+
 // Workflows table migration
 safeAlter("ALTER TABLE workflows ADD COLUMN canvas_state TEXT");
 safeAlter("ALTER TABLE workflows ADD COLUMN is_template INTEGER DEFAULT 0");
@@ -726,6 +746,7 @@ export interface GeneratedApp {
   generatedCode: string | null;
   previewUrl: string | null;
   status: string;
+  versions: string | null;
   createdAt: string;
 }
 
@@ -2383,6 +2404,7 @@ export class DatabaseStorage implements IStorage {
       generatedCode: row.generated_code,
       previewUrl: row.preview_url,
       status: row.status,
+      versions: row.versions ?? null,
       createdAt: row.created_at,
     };
   }
@@ -2412,7 +2434,7 @@ export class DatabaseStorage implements IStorage {
     const colMap: Record<string, string> = {
       name: 'name', description: 'description', appType: 'app_type',
       framework: 'framework', generatedCode: 'generated_code',
-      previewUrl: 'preview_url', status: 'status',
+      previewUrl: 'preview_url', status: 'status', versions: 'versions',
     };
     const fields: string[] = [];
     const values: any[] = [];
@@ -2554,6 +2576,18 @@ export class DatabaseStorage implements IStorage {
 
   async deletePropAccount(id: string): Promise<void> {
     sqlite.prepare('DELETE FROM prop_accounts WHERE id = ?').run(id);
+  }
+
+  // ── Stack Execution Log ──────────────────────────────────────────────────
+  addStackExecutionLog(entry: { id: string; stackId: string; connectionId: string; symbol: string; side: string; quantity: number; price: number; status: string; executedAt: string }): void {
+    sqlite.prepare(`
+      INSERT INTO stack_execution_log (id, stack_id, connection_id, symbol, side, quantity, price, status, executed_at)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+    `).run(entry.id, entry.stackId, entry.connectionId, entry.symbol, entry.side, entry.quantity, entry.price, entry.status, entry.executedAt);
+  }
+
+  getStackExecutionLogs(stackId: string): any[] {
+    return sqlite.prepare('SELECT * FROM stack_execution_log WHERE stack_id = ? ORDER BY executed_at DESC LIMIT 50').all(stackId) as any[];
   }
 }
 

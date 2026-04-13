@@ -32,6 +32,7 @@ import WhiteLabelPage from "@/pages/WhiteLabelPage";
 import PropTradingPage from "@/pages/PropTradingPage";
 import AppLayout from "@/components/AppLayout";
 import JarvisWidget from "@/components/JarvisWidget";
+import ErrorBoundary from "@/components/ErrorBoundary";
 import { ThemeProvider } from "./contexts/ThemeContext";
 
 function AppRouter() {
@@ -43,6 +44,7 @@ function AppRouter() {
       {/* Protected routes — wrapped in AppLayout */}
       <Route>
         <AppLayout>
+          <ErrorBoundary>
           <Switch>
             <Route path="/" component={Dashboard} />
             <Route path="/boss" component={BossPage} />
@@ -70,6 +72,7 @@ function AppRouter() {
             <Route path="/prop-trading" component={PropTradingPage} />
             <Route component={NotFound} />
           </Switch>
+          </ErrorBoundary>
         </AppLayout>
       </Route>
     </Switch>

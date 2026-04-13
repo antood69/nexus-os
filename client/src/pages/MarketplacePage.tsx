@@ -163,11 +163,16 @@ export default function MarketplacePage() {
     queryFn: async () => {
       const params = new URLSearchParams();
       if (category !== "all") params.set("category", category);
-      if (sort) params.set("sort", sort);
-      if (priceFilter !== "all") params.set("price", priceFilter);
+      if (sort) params.set("sortBy", sort);
+      if (priceFilter !== "all") {
+        const priceTypeMap: Record<string, string> = { free: "free", paid: "one_time" };
+        const mapped = priceTypeMap[priceFilter];
+        if (mapped) params.set("priceType", mapped);
+      }
       if (debouncedSearch) params.set("search", debouncedSearch);
       const res = await apiRequest("GET", `/api/marketplace/listings?${params}`);
-      return res.json();
+      const json = await res.json();
+      return json.listings ?? json;
     },
   });
 
