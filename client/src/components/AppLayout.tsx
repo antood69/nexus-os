@@ -1,5 +1,6 @@
 import { Link, useLocation } from "wouter";
-import { LayoutDashboard, GitBranch, Bot, ShieldCheck, CreditCard, Zap, BookOpen, Target, Settings } from "lucide-react";
+import { LayoutDashboard, GitBranch, Bot, ShieldCheck, CreditCard, Zap, BookOpen, Target, Settings, Coins } from "lucide-react";
+import TokenCounter from "./TokenCounter";
 
 const navItems = [
   { href: "/", label: "Dashboard", icon: LayoutDashboard },
@@ -9,6 +10,7 @@ const navItems = [
   { href: "/journal", label: "Trade Journal", icon: BookOpen },
   { href: "/bot-challenge", label: "Bot Challenge", icon: Target },
   { href: "/pricing", label: "Pricing", icon: CreditCard },
+  { href: "/usage", label: "Usage", icon: Coins },
   { href: "/settings", label: "Settings", icon: Settings },
 ];
 
@@ -53,6 +55,8 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
             );
           })}
         </nav>
+
+        <TokenCounter />
 
         <div className="px-3 py-3 border-t border-border">
           <Link href="/pricing">

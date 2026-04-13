@@ -13,9 +13,19 @@ import {
   Settings,
   BarChart2,
   Bell,
+  Coins,
 } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
+
+// ---------------------------------------------------------------------------
+// Helpers
+// ---------------------------------------------------------------------------
+function formatTokens(n: number): string {
+  if (n >= 1_000_000) return `${(n / 1_000_000).toFixed(1)}M`;
+  if (n >= 1_000) return `${(n / 1_000).toFixed(0)}K`;
+  return String(n);
+}
 
 // ---------------------------------------------------------------------------
 // Types
@@ -122,6 +132,15 @@ export default function Dashboard() {
     },
   });
 
+  const { data: tokenStatus } = useQuery<{ plan: { tokensUsed: number; monthlyTokens: number; tier: string; tokensRemaining: number } }>({
+    queryKey: ["token-status"],
+    queryFn: async () => {
+      const res = await fetch("/api/tokens/status");
+      if (!res.ok) throw new Error("Failed");
+      return res.json();
+    },
+  });
+
   const pendingEscalations = escalations.filter(
     (e) => e.status !== "resolved"
   ).length;
@@ -168,10 +187,10 @@ export default function Dashboard() {
               color="sky"
             />
             <KpiCard
-              icon={Zap}
-              label="Automations"
-              value={0}
-              sub="running workflows"
+              icon={Coins}
+              label="Token Budget"
+              value={tokenStatus ? formatTokens(tokenStatus.plan.tokensUsed) : "—"}
+              sub={tokenStatus ? `of ${formatTokens(tokenStatus.plan.monthlyTokens)} ${tokenStatus.plan.tier}` : "loading..."}
               color="amber"
             />
           </div>
@@ -255,6 +274,13 @@ export default function Dashboard() {
               title="Bot Challenge"
               description="Run automated trading challenges"
               color="red"
+            />
+            <QuickLinkCard
+              href="/usage"
+              icon={Coins}
+              title="Token Usage"
+              description="Monitor & buy AI tokens"
+              color="amber"
             />
           </div>
         </section>

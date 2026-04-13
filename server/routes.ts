@@ -127,13 +127,24 @@ export async function registerRoutes(
     // Call AI
     try {
       await storage.updateAgent(agentId, { status: "working" });
-      const reply = await runAgentChat(
+      const { reply, inputTokens, outputTokens, totalTokens } = await runAgentChat(
         agent?.model || "claude-sonnet",
         agent?.systemPrompt,
         history.slice(-20).map(m => ({ role: m.role as "user" | "assistant", content: m.content })),
         content
       );
       await storage.updateAgent(agentId, { status: "idle" });
+
+      // Record token usage (userId 1 as placeholder until auth is wired)
+      await storage.recordTokenUsage({
+        userId: 1,
+        model: agent?.model || "claude-sonnet",
+        inputTokens,
+        outputTokens,
+        totalTokens,
+        endpoint: "agent_chat",
+      });
+
       const assistantMsg = await storage.createMessage({ agentId, role: "assistant", content: reply });
       return res.status(201).json({ userMessage: userMsg, assistantMessage: assistantMsg });
     } catch (err: any) {
@@ -242,8 +253,126 @@ Be concise, direct, and helpful. If asked to perform an action, explain what you
 
     try {
       const { runAgentChat } = await import("./ai");
-      const reply = await runAgentChat("claude-sonnet", systemPrompt, [], message);
+      const { reply, inputTokens, outputTokens, totalTokens } = await runAgentChat("claude-sonnet", systemPrompt, [], message);
+
+      // Record token usage
+      await storage.recordTokenUsage({
+        userId: 1,
+        model: "claude-sonnet",
+        inputTokens,
+        outputTokens,
+        totalTokens,
+        endpoint: "jarvis",
+      });
+
       res.json({ reply });
+    } catch (err: any) {
+      res.status(500).json({ error: err.message });
+    }
+  });
+
+  // === TOKEN ECONOMY ===
+
+  // Get current user's plan + usage summary
+  app.get("/api/tokens/status", async (_req, res) => {
+    const userId = 1; // placeholder until auth
+    let plan = await storage.getUserPlan(userId);
+    if (!plan) {
+      // Auto-create free plan
+      const now = new Date();
+      const periodEnd = new Date(now.getFullYear(), now.getMonth() + 1, 1);
+      plan = await storage.createUserPlan({
+        userId,
+        tier: "free",
+        monthlyTokens: 50000,
+        tokensUsed: 0,
+        periodStart: now.toISOString(),
+        periodEnd: periodEnd.toISOString(),
+      });
+    }
+
+    // Check if period needs reset
+    if (new Date(plan.periodEnd) < new Date()) {
+      const now = new Date();
+      const periodEnd = new Date(now.getFullYear(), now.getMonth() + 1, 1);
+      plan = await storage.updateUserPlan(plan.id, {
+        tokensUsed: 0,
+        periodStart: now.toISOString(),
+        periodEnd: periodEnd.toISOString(),
+      }) || plan;
+    }
+
+    const packs = await storage.getTokenPacksByUser(userId);
+    const bonusTokens = packs
+      .filter(p => p.status === "active")
+      .reduce((sum, p) => sum + p.tokensRemaining, 0);
+
+    const TIER_LIMITS: Record<string, number> = {
+      free: 50000, starter: 500000, pro: 2000000, agency: 10000000,
+    };
+
+    res.json({
+      plan: {
+        tier: plan.tier,
+        monthlyTokens: plan.monthlyTokens,
+        tokensUsed: plan.tokensUsed,
+        tokensRemaining: Math.max(0, plan.monthlyTokens - plan.tokensUsed) + bonusTokens,
+        bonusTokens,
+        periodEnd: plan.periodEnd,
+      },
+      tierLimits: TIER_LIMITS,
+    });
+  });
+
+  // Get usage history
+  app.get("/api/tokens/usage", async (_req, res) => {
+    const userId = 1;
+    const usage = await storage.getTokenUsageByUser(userId);
+    res.json(usage);
+  });
+
+  // Get usage summary (current period)
+  app.get("/api/tokens/summary", async (_req, res) => {
+    const userId = 1;
+    const plan = await storage.getUserPlan(userId);
+    const since = plan?.periodStart || new Date(new Date().getFullYear(), new Date().getMonth(), 1).toISOString();
+    const summary = await storage.getTokenUsageSummary(userId, since);
+    res.json(summary);
+  });
+
+  // Buy token pack (creates Stripe payment intent for one-time purchase)
+  app.post("/api/tokens/buy", async (req, res) => {
+    const { packSize } = req.body as { packSize: "50k" | "200k" | "1m" };
+    const PACKS: Record<string, { tokens: number; price: number; label: string }> = {
+      "50k":  { tokens: 50000,   price: 500,  label: "50K Tokens" },
+      "200k": { tokens: 200000,  price: 1500, label: "200K Tokens" },
+      "1m":   { tokens: 1000000, price: 4900, label: "1M Tokens" },
+    };
+
+    const pack = PACKS[packSize];
+    if (!pack) return res.status(400).json({ error: "Invalid pack size" });
+
+    try {
+      const { stripe } = await import("./stripe");
+      const origin = req.headers.origin || `https://${req.headers.host}`;
+
+      const session = await stripe.checkout.sessions.create({
+        mode: "payment",
+        payment_method_types: ["card"],
+        line_items: [{
+          price_data: {
+            currency: "usd",
+            product_data: { name: `NEXUS OS — ${pack.label}` },
+            unit_amount: pack.price,
+          },
+          quantity: 1,
+        }],
+        success_url: `${origin}/#/usage?bought=${packSize}`,
+        cancel_url: `${origin}/#/usage?canceled=1`,
+        metadata: { type: "token_pack", packSize, tokens: String(pack.tokens) },
+      });
+
+      res.json({ url: session.url });
     } catch (err: any) {
       res.status(500).json({ error: err.message });
     }

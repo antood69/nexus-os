@@ -1,65 +1,69 @@
 import { useState } from "react";
-import { Check, Zap, Building2, Sparkles, ArrowRight, ChevronDown, ChevronUp, Loader2 } from "lucide-react";
+import { Check, Zap, Building2, Sparkles, ArrowRight, ChevronDown, ChevronUp, Loader2, Coins } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { useToast } from "@/hooks/use-toast";
+import { Link } from "wouter";
 
 const tiers = [
   {
     id: "free",
     name: "Free",
     price: { monthly: 0, annual: 0 },
-    description: "Get started with AI agent orchestration",
+    description: "Get started with AI orchestration",
     icon: Sparkles,
     color: "text-muted-foreground",
     accent: "border-border",
     badgeVariant: null as null,
-    limits: {
-      agents: 2,
-      workflows: 1,
-      models: ["GPT-4o"],
-      storage: "100MB",
-      jobsPerMonth: 50,
-    },
     features: [
+      "50K tokens / month",
       "2 AI agents",
       "1 active workflow",
-      "GPT-4o model access",
-      "50 jobs / month",
+      "GPT-4o model",
       "Agent chat interface",
-      "Basic audit reviews",
-      "100MB storage",
       "Community support",
     ],
     cta: "Current Plan",
     current: true,
   },
   {
+    id: "starter",
+    name: "Starter",
+    price: { monthly: 19, annual: 15 },
+    description: "For individuals building AI workflows",
+    icon: Zap,
+    color: "text-emerald-400",
+    accent: "border-emerald-500/40",
+    badgeVariant: null as null,
+    features: [
+      "500K tokens / month",
+      "5 AI agents",
+      "5 active workflows",
+      "All 4 AI models",
+      "Agent chat + Jarvis",
+      "Email support",
+    ],
+    cta: "Upgrade to Starter",
+    current: false,
+  },
+  {
     id: "pro",
     name: "Pro",
-    price: { monthly: 29, annual: 23 },
-    description: "Scale your AI workforce without limits",
+    price: { monthly: 79, annual: 63 },
+    description: "Scale your AI workforce",
     icon: Zap,
     color: "text-primary",
     accent: "border-primary",
     badgeVariant: "default" as "default",
-    limits: {
-      agents: 10,
-      workflows: 10,
-      models: ["Claude Sonnet", "Claude Opus", "GPT-4o", "Perplexity Sonar"],
-      storage: "10GB",
-      jobsPerMonth: 2000,
-    },
     features: [
-      "10 AI agents",
-      "10 active workflows",
+      "2M tokens / month",
+      "25 AI agents",
+      "Unlimited workflows",
       "All 4 AI models",
-      "2,000 jobs / month",
       "Priority job queue",
       "Advanced audit AI",
-      "Workflow activity feed",
-      "10GB storage",
-      "Email support",
+      "Workflow analytics",
+      "Priority support",
     ],
     cta: "Upgrade to Pro",
     current: false,
@@ -67,30 +71,21 @@ const tiers = [
   {
     id: "agency",
     name: "Agency",
-    price: { monthly: 99, annual: 79 },
-    description: "Unlimited power for teams & white-label",
+    price: { monthly: 199, annual: 159 },
+    description: "Unlimited power for teams",
     icon: Building2,
     color: "text-violet-400",
     accent: "border-violet-500",
     badgeVariant: null as null,
-    limits: {
-      agents: Infinity,
-      workflows: Infinity,
-      models: ["Claude Sonnet", "Claude Opus", "GPT-4o", "Perplexity Sonar"],
-      storage: "Unlimited",
-      jobsPerMonth: Infinity,
-    },
     features: [
+      "10M tokens / month",
       "Unlimited agents",
       "Unlimited workflows",
       "All 4 AI models",
-      "Unlimited jobs",
       "White-label branding",
-      "Custom domain",
       "Team seats (up to 10)",
-      "Priority API access",
-      "Unlimited storage",
-      "Dedicated Slack support",
+      "Custom domain",
+      "Dedicated support",
     ],
     cta: "Go Agency",
     current: false,
@@ -99,16 +94,20 @@ const tiers = [
 
 const faqs = [
   {
+    q: "What are tokens?",
+    a: "Tokens are the units that power AI calls in NEXUS OS. Each message sent to an AI model consumes tokens based on the length of input and output. Your plan includes a monthly token allowance, and you can buy additional token packs anytime.",
+  },
+  {
     q: "Can I switch plans at any time?",
     a: "Yes — upgrades take effect immediately and you're billed the prorated difference. Downgrades apply at the end of your billing cycle.",
   },
   {
-    q: "What happens when I hit my agent or job limit?",
-    a: "You'll see a clear in-app warning before you hit limits. Jobs queue and won't be lost — upgrade to unblock them instantly.",
+    q: "What happens when I hit my token limit?",
+    a: "You'll see a clear in-app warning before you hit limits. You can buy additional token packs from the Usage page to continue without interruption.",
   },
   {
-    q: "Do unused jobs carry over?",
-    a: "Monthly job credits reset each billing cycle. Annual plan holders get a small rollover buffer (up to 10% of monthly allowance).",
+    q: "Do unused tokens carry over?",
+    a: "Monthly token allocations reset each billing cycle. Token packs you purchase do not expire — they carry forward until depleted.",
   },
   {
     q: "What's white-label?",
@@ -168,42 +167,30 @@ export default function PricingPage() {
 
   async function handleUpgrade(tierId: string) {
     if (tierId === "free") return;
-
     const billing = annual ? "annual" : "monthly";
     setLoadingTier(tierId);
-
     try {
       const res = await fetch("/api/stripe/checkout", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ tier: tierId, billing }),
       });
-
       const data = await res.json();
-
-      if (!res.ok) {
-        throw new Error(data.error || "Checkout failed");
-      }
-
-      // Redirect to Stripe Checkout
+      if (!res.ok) throw new Error(data.error || "Checkout failed");
       window.location.href = data.url;
     } catch (err: any) {
-      toast({
-        title: "Checkout error",
-        description: err.message || "Something went wrong. Please try again.",
-        variant: "destructive",
-      });
+      toast({ title: "Checkout error", description: err.message || "Something went wrong.", variant: "destructive" });
       setLoadingTier(null);
     }
   }
 
   return (
-    <div className="min-h-full px-6 py-10 pb-20 max-w-5xl mx-auto" data-testid="pricing-page">
+    <div className="min-h-full px-6 py-10 pb-20 max-w-6xl mx-auto" data-testid="pricing-page">
 
       {/* Success / Cancel banners */}
       {checkoutSuccess && (
         <div className="mb-6 rounded-lg border border-emerald-500/40 bg-emerald-500/10 px-4 py-3 text-sm text-emerald-400 text-center">
-          🎉 Subscription activated! Welcome to NEXUS OS {annual ? "Annual" : "Monthly"}.
+          Subscription activated! Welcome to NEXUS OS {annual ? "Annual" : "Monthly"}.
         </div>
       )}
       {checkoutCanceled && (
@@ -256,7 +243,7 @@ export default function PricingPage() {
       </div>
 
       {/* Tier cards */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-5">
         {tiers.map((tier) => {
           const Icon = tier.icon;
           const price = annual ? tier.price.annual : tier.price.monthly;
@@ -280,7 +267,7 @@ export default function PricingPage() {
 
               {/* Tier header */}
               <div className="flex items-center gap-2 mb-3">
-                <div className={`p-1.5 rounded-md ${tier.id === "pro" ? "bg-primary/15" : tier.id === "agency" ? "bg-violet-500/15" : "bg-secondary"}`}>
+                <div className={`p-1.5 rounded-md ${tier.id === "pro" ? "bg-primary/15" : tier.id === "agency" ? "bg-violet-500/15" : tier.id === "starter" ? "bg-emerald-500/15" : "bg-secondary"}`}>
                   <Icon className={`w-4 h-4 ${tier.color}`} />
                 </div>
                 <span className="font-semibold text-sm text-foreground">{tier.name}</span>
@@ -306,7 +293,7 @@ export default function PricingPage() {
               <Button
                 data-testid={`cta-${tier.id}`}
                 variant={tier.current ? "outline" : tier.id === "pro" ? "default" : "secondary"}
-                className={`w-full mb-5 text-sm ${tier.id === "agency" ? "bg-violet-600 hover:bg-violet-700 text-foreground border-0" : ""}`}
+                className={`w-full mb-5 text-sm ${tier.id === "agency" ? "bg-violet-600 hover:bg-violet-700 text-foreground border-0" : tier.id === "starter" ? "bg-emerald-600 hover:bg-emerald-700 text-white border-0" : ""}`}
                 disabled={tier.current || isLoading}
                 onClick={() => handleUpgrade(tier.id)}
               >
@@ -332,7 +319,7 @@ export default function PricingPage() {
               <ul className="space-y-2 flex-1">
                 {tier.features.map((f) => (
                   <li key={f} className="flex items-start gap-2 text-xs text-muted-foreground">
-                    <Check className={`w-3.5 h-3.5 mt-0.5 flex-shrink-0 ${tier.id === "pro" ? "text-primary" : tier.id === "agency" ? "text-violet-400" : "text-muted-foreground"}`} />
+                    <Check className={`w-3.5 h-3.5 mt-0.5 flex-shrink-0 ${tier.id === "pro" ? "text-primary" : tier.id === "agency" ? "text-violet-400" : tier.id === "starter" ? "text-emerald-400" : "text-muted-foreground"}`} />
                     {f}
                   </li>
                 ))}
@@ -350,9 +337,9 @@ export default function PricingPage() {
         </div>
         <div className="flex flex-wrap gap-6">
           {[
-            { label: "Agents", used: 2, limit: 2 },
-            { label: "Workflows", used: 1, limit: 1 },
-            { label: "Jobs this month", used: 12, limit: 50 },
+            { label: "Tokens", used: 0, limit: 50000 },
+            { label: "Agents", used: 0, limit: 2 },
+            { label: "Workflows", used: 0, limit: 1 },
           ].map((meter) => {
             const pct = Math.min((meter.used / meter.limit) * 100, 100);
             const danger = pct >= 90;
@@ -374,9 +361,17 @@ export default function PricingPage() {
             );
           })}
         </div>
-        <Button variant="default" size="sm" className="text-xs flex-shrink-0" onClick={() => handleUpgrade("pro")} data-testid="usage-upgrade-btn">
-          Upgrade <ArrowRight className="w-3 h-3 ml-1" />
-        </Button>
+        <div className="flex gap-2">
+          <Link href="/usage">
+            <Button variant="outline" size="sm" className="text-xs flex-shrink-0">
+              <Coins className="w-3 h-3 mr-1" />
+              Buy Tokens
+            </Button>
+          </Link>
+          <Button variant="default" size="sm" className="text-xs flex-shrink-0" onClick={() => handleUpgrade("pro")} data-testid="usage-upgrade-btn">
+            Upgrade <ArrowRight className="w-3 h-3 ml-1" />
+          </Button>
+        </div>
       </div>
 
       {/* FAQ */}

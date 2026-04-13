@@ -15,6 +15,7 @@ import PricingPage from "@/pages/PricingPage";
 import TradingJournalPage from "@/pages/TradingJournalPage";
 import BotChallengePage from "@/pages/BotChallengePage";
 import SettingsPage from "@/pages/SettingsPage";
+import TokenUsagePage from "@/pages/TokenUsagePage";
 import AppLayout from "@/components/AppLayout";
 import JarvisWidget from "@/components/JarvisWidget";
 import { ThemeProvider } from "./contexts/ThemeContext";
@@ -34,6 +35,7 @@ function AppRouter() {
           <Route path="/journal" component={TradingJournalPage} />
           <Route path="/bot-challenge" component={BotChallengePage} />
           <Route path="/settings" component={SettingsPage} />
+          <Route path="/usage" component={TokenUsagePage} />
           <Route component={NotFound} />
         </Switch>
       </AppLayout>

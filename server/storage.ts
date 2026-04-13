@@ -8,10 +8,13 @@ import {
   type Escalation, type InsertEscalation, escalations,
   type TradeJournalEntry, type InsertTradeJournal, tradeJournal,
   type BotChallenge, type InsertBotChallenge, botChallenges,
+  type TokenUsageRecord, type InsertTokenUsage, tokenUsage,
+  type TokenPack, type InsertTokenPack, tokenPacks,
+  type UserPlan, type InsertUserPlan, userPlans,
 } from "@shared/schema";
 import { drizzle } from "drizzle-orm/better-sqlite3";
 import Database from "better-sqlite3";
-import { eq, desc } from "drizzle-orm";
+import { eq, desc, gte } from "drizzle-orm";
 
 const sqlite = new Database("data.db");
 sqlite.pragma("journal_mode = WAL");
@@ -61,6 +64,19 @@ export interface IStorage {
   getBotChallenges(): Promise<BotChallenge[]>;
   createBotChallenge(c: InsertBotChallenge): Promise<BotChallenge>;
   updateBotChallenge(id: number, data: Partial<InsertBotChallenge>): Promise<BotChallenge | undefined>;
+  // Token Usage
+  recordTokenUsage(usage: InsertTokenUsage): Promise<TokenUsageRecord>;
+  getTokenUsageByUser(userId: number): Promise<TokenUsageRecord[]>;
+  getTokenUsageSummary(userId: number, since: string): Promise<{ total: number; byModel: Record<string, number> }>;
+  // Token Packs
+  getTokenPacksByUser(userId: number): Promise<TokenPack[]>;
+  createTokenPack(pack: InsertTokenPack): Promise<TokenPack>;
+  updateTokenPack(id: number, data: Partial<InsertTokenPack>): Promise<TokenPack | undefined>;
+  // User Plans
+  getUserPlan(userId: number): Promise<UserPlan | undefined>;
+  createUserPlan(plan: InsertUserPlan): Promise<UserPlan>;
+  updateUserPlan(id: number, data: Partial<InsertUserPlan>): Promise<UserPlan | undefined>;
+  updateUser(id: number, data: Partial<{ tier: string; stripeCustomerId: string; subscriptionId: string }>): Promise<User | undefined>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -179,6 +195,54 @@ export class DatabaseStorage implements IStorage {
   }
   async updateBotChallenge(id: number, data: Partial<InsertBotChallenge>) {
     return db.update(botChallenges).set(data).where(eq(botChallenges.id, id)).returning().get();
+  }
+
+  // Token Usage
+  async recordTokenUsage(usage: InsertTokenUsage): Promise<TokenUsageRecord> {
+    return db.insert(tokenUsage).values({ ...usage, createdAt: new Date().toISOString() }).returning().get();
+  }
+  async getTokenUsageByUser(userId: number): Promise<TokenUsageRecord[]> {
+    return db.select().from(tokenUsage).where(eq(tokenUsage.userId, userId)).orderBy(desc(tokenUsage.id)).all();
+  }
+  async getTokenUsageSummary(userId: number, since: string): Promise<{ total: number; byModel: Record<string, number> }> {
+    const rows = await db.select().from(tokenUsage)
+      .where(eq(tokenUsage.userId, userId))
+      .all();
+    // Filter by since date in JS
+    const filtered = rows.filter(r => r.createdAt >= since);
+    const total = filtered.reduce((sum, r) => sum + r.totalTokens, 0);
+    const byModel: Record<string, number> = {};
+    for (const r of filtered) {
+      byModel[r.model] = (byModel[r.model] || 0) + r.totalTokens;
+    }
+    return { total, byModel };
+  }
+
+  // Token Packs
+  async getTokenPacksByUser(userId: number): Promise<TokenPack[]> {
+    return db.select().from(tokenPacks).where(eq(tokenPacks.userId, userId)).orderBy(desc(tokenPacks.id)).all();
+  }
+  async createTokenPack(pack: InsertTokenPack): Promise<TokenPack> {
+    return db.insert(tokenPacks).values({ ...pack, createdAt: new Date().toISOString() }).returning().get();
+  }
+  async updateTokenPack(id: number, data: Partial<InsertTokenPack>): Promise<TokenPack | undefined> {
+    return db.update(tokenPacks).set(data).where(eq(tokenPacks.id, id)).returning().get();
+  }
+
+  // User Plans
+  async getUserPlan(userId: number): Promise<UserPlan | undefined> {
+    return db.select().from(userPlans).where(eq(userPlans.userId, userId)).orderBy(desc(userPlans.id)).get();
+  }
+  async createUserPlan(plan: InsertUserPlan): Promise<UserPlan> {
+    return db.insert(userPlans).values({ ...plan, createdAt: new Date().toISOString() }).returning().get();
+  }
+  async updateUserPlan(id: number, data: Partial<InsertUserPlan>): Promise<UserPlan | undefined> {
+    return db.update(userPlans).set(data).where(eq(userPlans.id, id)).returning().get();
+  }
+
+  // Update User
+  async updateUser(id: number, data: Partial<{ tier: string; stripeCustomerId: string; subscriptionId: string }>): Promise<User | undefined> {
+    return db.update(users).set(data).where(eq(users.id, id)).returning().get();
   }
 }
 

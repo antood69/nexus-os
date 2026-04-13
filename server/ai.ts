@@ -7,6 +7,13 @@ export interface ChatMessage {
   content: string;
 }
 
+export interface AiResponse {
+  reply: string;
+  inputTokens: number;
+  outputTokens: number;
+  totalTokens: number;
+}
+
 const SYSTEM_DEFAULT =
   "You are a focused AI agent inside NEXUS OS, an AI orchestration platform. Be concise, action-oriented, and helpful.";
 
@@ -27,14 +34,14 @@ function perplexityClient() {
 
 /**
  * Route a chat request to Claude, GPT-4o, or Perplexity based on the agent's model.
- * Returns the assistant reply as a string.
+ * Returns an AiResponse with the reply text and token usage counts.
  */
 export async function runAgentChat(
   model: string,
   systemPrompt: string | null | undefined,
   history: ChatMessage[],
   userMessage: string
-): Promise<string> {
+): Promise<AiResponse> {
   const system = systemPrompt?.trim() || SYSTEM_DEFAULT;
 
   const msgs: ChatMessage[] = [
@@ -55,7 +62,13 @@ export async function runAgentChat(
     });
 
     const block = response.content[0];
-    return block.type === "text" ? block.text : "[No response]";
+    const reply = block.type === "text" ? block.text : "[No response]";
+    return {
+      reply,
+      inputTokens: response.usage.input_tokens,
+      outputTokens: response.usage.output_tokens,
+      totalTokens: response.usage.input_tokens + response.usage.output_tokens,
+    };
   }
 
   // ── GPT-4o ─────────────────────────────────────────────────────────────
@@ -68,7 +81,12 @@ export async function runAgentChat(
         ...msgs.map((m) => ({ role: m.role, content: m.content })),
       ],
     });
-    return response.choices[0]?.message?.content ?? "[No response]";
+    return {
+      reply: response.choices[0]?.message?.content ?? "[No response]",
+      inputTokens: response.usage?.prompt_tokens ?? 0,
+      outputTokens: response.usage?.completion_tokens ?? 0,
+      totalTokens: (response.usage?.prompt_tokens ?? 0) + (response.usage?.completion_tokens ?? 0),
+    };
   }
 
   // ── Perplexity (sonar — real-time web search built in) ──────────────────
@@ -95,8 +113,13 @@ export async function runAgentChat(
         ...dedupedMsgs.map((m) => ({ role: m.role, content: m.content })),
       ],
     } as any);
-    return (response as any).choices[0]?.message?.content ?? "[No response]";
+    return {
+      reply: (response as any).choices[0]?.message?.content ?? "[No response]",
+      inputTokens: (response as any).usage?.prompt_tokens ?? 0,
+      outputTokens: (response as any).usage?.completion_tokens ?? 0,
+      totalTokens: ((response as any).usage?.prompt_tokens ?? 0) + ((response as any).usage?.completion_tokens ?? 0),
+    };
   }
 
-  return `[${model}] Model not configured.`;
+  return { reply: `[${model}] Model not configured.`, inputTokens: 0, outputTokens: 0, totalTokens: 0 };
 }

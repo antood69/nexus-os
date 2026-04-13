@@ -79,7 +79,7 @@ export const users = sqliteTable("users", {
   id: integer("id").primaryKey({ autoIncrement: true }),
   username: text("username").notNull().unique(),
   password: text("password").notNull(),
-  tier: text("tier").notNull().default("free"), // free | pro | agency
+  tier: text("tier").notNull().default("free"), // free | starter | pro | agency
   stripeCustomerId: text("stripe_customer_id"),
   subscriptionId: text("subscription_id"),
 });
@@ -150,3 +150,49 @@ export const botChallenges = sqliteTable("bot_challenges", {
 export const insertBotChallengeSchema = createInsertSchema(botChallenges).omit({ id: true, createdAt: true });
 export type InsertBotChallenge = z.infer<typeof insertBotChallengeSchema>;
 export type BotChallenge = typeof botChallenges.$inferSelect;
+
+// Token Usage — tracks every AI call's token consumption
+export const tokenUsage = sqliteTable("token_usage", {
+  id: integer("id").primaryKey({ autoIncrement: true }),
+  userId: integer("user_id").notNull(),
+  model: text("model").notNull(), // claude-sonnet | claude-opus | gpt-4o | perplexity
+  inputTokens: integer("input_tokens").notNull().default(0),
+  outputTokens: integer("output_tokens").notNull().default(0),
+  totalTokens: integer("total_tokens").notNull().default(0),
+  endpoint: text("endpoint"), // "agent_chat" | "jarvis" etc
+  createdAt: text("created_at").notNull().default(""),
+});
+export const insertTokenUsageSchema = createInsertSchema(tokenUsage).omit({ id: true, createdAt: true });
+export type InsertTokenUsage = z.infer<typeof insertTokenUsageSchema>;
+export type TokenUsageRecord = typeof tokenUsage.$inferSelect;
+
+// Token Packs — purchased add-on token bundles
+export const tokenPacks = sqliteTable("token_packs", {
+  id: integer("id").primaryKey({ autoIncrement: true }),
+  userId: integer("user_id").notNull(),
+  tokens: integer("tokens").notNull(),
+  price: integer("price").notNull(), // cents
+  stripePaymentId: text("stripe_payment_id"),
+  status: text("status").notNull().default("active"), // active | depleted
+  tokensRemaining: integer("tokens_remaining").notNull(),
+  purchasedAt: text("purchased_at").notNull().default(""),
+  createdAt: text("created_at").notNull().default(""),
+});
+export const insertTokenPackSchema = createInsertSchema(tokenPacks).omit({ id: true, createdAt: true });
+export type InsertTokenPack = z.infer<typeof insertTokenPackSchema>;
+export type TokenPack = typeof tokenPacks.$inferSelect;
+
+// User Plans — tracks subscription period token allowances
+export const userPlans = sqliteTable("user_plans", {
+  id: integer("id").primaryKey({ autoIncrement: true }),
+  userId: integer("user_id").notNull(),
+  tier: text("tier").notNull().default("free"), // free | starter | pro | agency
+  monthlyTokens: integer("monthly_tokens").notNull().default(50000),
+  tokensUsed: integer("tokens_used").notNull().default(0),
+  periodStart: text("period_start").notNull().default(""),
+  periodEnd: text("period_end").notNull().default(""),
+  createdAt: text("created_at").notNull().default(""),
+});
+export const insertUserPlanSchema = createInsertSchema(userPlans).omit({ id: true, createdAt: true });
+export type InsertUserPlan = z.infer<typeof insertUserPlanSchema>;
+export type UserPlan = typeof userPlans.$inferSelect;
