@@ -244,17 +244,16 @@ const FRAG_GLOW = /* glsl */`
 
   void main() {
     float d = length(vUv - vec2(0.5)) * 2.0;
-    // Hard-kill pixels near quad edge to eliminate smoky box artifact
-    if (d > 0.92) discard;
-    float edgeFade = smoothstep(0.92, 0.55, d);
+    // Circular mask — discard everything outside radius
+    if (d > 0.78) discard;
+    float edgeFade = smoothstep(0.78, 0.35, d);
     float p = 1.0 + uPulse * 0.25;
     float L0 = exp(-d * d * 28.0) * 1.8  * uIntensity;
     float L1 = exp(-d * d * 8.0)  * 0.72 * p * uIntensity;
     float L2 = exp(-d * d * 2.5)  * 0.30 * p * uIntensity;
-    float L3 = exp(-d * d * 0.6)  * 0.10 * uIntensity;
-    float L4 = exp(-d * d * 0.18) * 0.035 * uIntensity;
-    vec3 col = vec3(1.0) * L0 + uCore * L1 + uMid * L2 + uOuter * L3 + uOuter * L4;
-    float alpha = (L0 + L1 + L2 + L3 + L4) * edgeFade;
+    // Kill the outer haze layers entirely — they cause the smoky box
+    vec3 col = vec3(1.0) * L0 + uCore * L1 + uMid * L2;
+    float alpha = (L0 + L1 + L2) * edgeFade;
     gl_FragColor = vec4(col * edgeFade, alpha);
   }
 `;
@@ -411,9 +410,8 @@ function JarvisOrb({ orbState, audioAmplitude = 0 }: { orbState: OrbState; audio
     });
     const glow1 = new THREE.Mesh(new THREE.PlaneGeometry(1.25, 1.25), glowMat);
     glow1.renderOrder = -2; scene.add(glow1);
-    const glow2Mat = glowMat.clone();
-    const glow2 = new THREE.Mesh(new THREE.PlaneGeometry(2.0, 2.0), glow2Mat);
-    glow2.renderOrder = -3; scene.add(glow2);
+    // Removed glow2 — the oversized outer glow plane caused the visible smoky rectangle
+    const glow2Mat = glowMat; // keep ref for uniform updates below
 
     // 3. DUST
     const dPos = new Float32Array(DUST_COUNT * 3);
@@ -539,8 +537,8 @@ function JarvisOrb({ orbState, audioAmplitude = 0 }: { orbState: OrbState; audio
         mat.uniforms.uIntensity.value = c.coreIntensity * mul;
         mat.uniforms.uPulse.value = pulse;
       };
-      glowUpdater(glowMat, 0.92); glowUpdater(glow2Mat, 0.48);
-      glow1.quaternion.copy(camera.quaternion); glow2.quaternion.copy(camera.quaternion);
+      glowUpdater(glowMat, 0.92);
+      glow1.quaternion.copy(camera.quaternion);
 
       dMat.uniforms.uTime.value = t;
       dMat.uniforms.uColor.value.setRGB(...c.particleColor);
@@ -591,7 +589,6 @@ function JarvisOrb({ orbState, audioAmplitude = 0 }: { orbState: OrbState; audio
       if (mount.contains(renderer.domElement)) mount.removeChild(renderer.domElement);
       pGeom.dispose(); pMat.dispose();
       glow1.geometry.dispose(); glowMat.dispose();
-      glow2.geometry.dispose(); glow2Mat.dispose();
       dGeom.dispose(); dMat.dispose();
       for (const rd of rings) { rd.mesh.geometry.dispose(); (rd.mesh.material as THREE.Material).dispose(); }
       for (const a of arcs) { a.geom.dispose(); a.mat.dispose(); }
