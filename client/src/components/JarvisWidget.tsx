@@ -334,7 +334,7 @@ function JarvisOrb({ orbState, audioAmplitude = 0 }: { orbState: OrbState; audio
     const mount = mountRef.current;
     if (!mount) return;
 
-    const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true, powerPreference: "high-performance" });
+    const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true, premultipliedAlpha: false, powerPreference: "high-performance" });
     renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
     renderer.setClearColor(0x000000, 0);
     mount.appendChild(renderer.domElement);
@@ -760,16 +760,7 @@ export function JarvisWidget() {
           className="fixed inset-0 z-[9999] flex flex-col"
           style={{ background: "#000000" }}
         >
-          {/* Scanline overlay */}
-          <div
-            className="absolute inset-0 pointer-events-none"
-            style={{
-              zIndex: 1,
-              opacity: 0.025,
-              backgroundImage: "repeating-linear-gradient(0deg, transparent, transparent 2px, rgba(0,190,255,0.08) 2px, rgba(0,190,255,0.08) 3px)",
-              backgroundSize: "100% 4px",
-            }}
-          />
+          {/* Scanline overlay removed — it created a visible rectangular gap behind the Three.js canvas */}
 
           {/* Header */}
           <div className="relative z-10 flex items-center justify-between px-6 py-4 border-b border-cyan-500/10">
