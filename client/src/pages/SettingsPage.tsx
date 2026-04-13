@@ -6,6 +6,7 @@ import { Link } from "wouter";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { apiRequest } from "@/lib/queryClient";
+import { AI_PROVIDERS, getProvider } from "@/lib/ai-providers";
 
 interface TokenStatus {
   plan: {
@@ -29,14 +30,7 @@ interface UserApiKey {
   createdAt: string;
 }
 
-const PROVIDERS = [
-  { id: "openai", name: "OpenAI", icon: "🟢", models: ["gpt-4o", "gpt-4o-mini", "gpt-4-turbo", "gpt-3.5-turbo", "o1-preview", "o1-mini"] },
-  { id: "anthropic", name: "Anthropic", icon: "🟠", models: ["claude-3.5-sonnet", "claude-3-opus", "claude-3-sonnet", "claude-3-haiku"] },
-  { id: "google", name: "Google AI", icon: "🔵", models: ["gemini-2.0-flash", "gemini-1.5-pro", "gemini-1.5-flash"] },
-  { id: "mistral", name: "Mistral", icon: "🟣", models: ["mistral-large", "mistral-medium", "mistral-small", "mixtral-8x7b"] },
-  { id: "groq", name: "Groq", icon: "⚡", models: ["llama-3.1-70b", "llama-3.1-8b", "mixtral-8x7b", "gemma2-9b"] },
-  { id: "ollama", name: "Ollama (Local)", icon: "🏠", models: ["llama3.1", "codellama", "mistral", "phi3", "gemma2"] },
-];
+
 
 function formatTokens(n: number): string {
   if (n >= 1_000_000) return `${(n / 1_000_000).toFixed(1)}M`;
@@ -117,7 +111,7 @@ export default function SettingsPage() {
 
   const plan = status?.plan;
   const pct = plan ? Math.min((plan.tokensUsed / plan.monthlyTokens) * 100, 100) : 0;
-  const selectedProvider = PROVIDERS.find(p => p.id === addForm.provider);
+  const selectedProvider = AI_PROVIDERS.find(p => p.id === addForm.provider);
 
   const TABS = [
     { id: "general" as const, label: "General" },
@@ -277,7 +271,7 @@ export default function SettingsPage() {
                     onChange={e => setAddForm(f => ({ ...f, provider: e.target.value, defaultModel: "" }))}
                     className="w-full bg-background border border-border rounded-md px-2 py-1.5 text-xs text-foreground"
                   >
-                    {PROVIDERS.map(p => (
+                    {AI_PROVIDERS.map(p => (
                       <option key={p.id} value={p.id}>{p.icon} {p.name}</option>
                     ))}
                   </select>
@@ -291,7 +285,7 @@ export default function SettingsPage() {
                   >
                     <option value="">Auto</option>
                     {selectedProvider?.models.map(m => (
-                      <option key={m} value={m}>{m}</option>
+                      <option key={m.id} value={m.id}>{m.name}{m.context ? ` (${m.context})` : ""}</option>
                     ))}
                   </select>
                 </div>
@@ -304,7 +298,7 @@ export default function SettingsPage() {
                 {addForm.provider === "ollama" ? (
                   <input
                     type="text"
-                    placeholder="http://localhost:11434"
+                    placeholder={selectedProvider?.keyPlaceholder || "http://localhost:11434"}
                     value={addForm.endpointUrl}
                     onChange={e => setAddForm(f => ({ ...f, endpointUrl: e.target.value }))}
                     className="w-full bg-background border border-border rounded-md px-2 py-1.5 text-xs text-foreground font-mono"
@@ -312,7 +306,7 @@ export default function SettingsPage() {
                 ) : (
                   <input
                     type="password"
-                    placeholder="sk-..."
+                    placeholder={selectedProvider?.keyPlaceholder || "sk-..."}
                     value={addForm.apiKey}
                     onChange={e => setAddForm(f => ({ ...f, apiKey: e.target.value }))}
                     className="w-full bg-background border border-border rounded-md px-2 py-1.5 text-xs text-foreground font-mono"
@@ -356,7 +350,7 @@ export default function SettingsPage() {
           )}
 
           {apiKeys.map(key => {
-            const provider = PROVIDERS.find(p => p.id === key.provider);
+            const provider = getProvider(key.provider);
             const isTesting = testingId === key.id;
             const result = testResult?.id === key.id ? testResult : null;
 
@@ -378,7 +372,9 @@ export default function SettingsPage() {
                     </div>
                     <p className="text-xs text-muted-foreground font-mono truncate">
                       {key.provider === "ollama" ? (key.endpointUrl || "localhost:11434") : (key.apiKey || "No key set")}
-                      {key.defaultModel && <span className="ml-2 text-primary">· {key.defaultModel}</span>}
+                      {key.defaultModel && (
+                        <span className="ml-2 text-primary">· {provider?.models.find(m => m.id === key.defaultModel)?.name || key.defaultModel}</span>
+                      )}
                     </p>
                   </div>
                 </div>
