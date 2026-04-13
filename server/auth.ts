@@ -403,10 +403,16 @@ export function createAuthRouter(): Router {
           message: "Your account has been created via GitHub. You're all set.",
         });
       } else {
-        await storage.updateUser(user.id, {
+        // Link GitHub provider to existing user if not already linked
+        const updateData: any = {
           avatarUrl: ghUser.avatar_url,
           lastLoginAt: new Date().toISOString(),
-        } as any);
+        };
+        if (!user.providerId) {
+          updateData.authProvider = "github";
+          updateData.providerId = String(ghUser.id);
+        }
+        await storage.updateUser(user.id, updateData);
         // Login alert for existing users
         const ip = req.headers["x-forwarded-for"] as string || req.socket.remoteAddress || "Unknown";
         sendLoginAlertEmail(user.id, user.email, user.displayName || user.username, ip);
@@ -495,10 +501,16 @@ export function createAuthRouter(): Router {
           message: "Your account has been created via Google. You're all set.",
         });
       } else {
-        await storage.updateUser(user.id, {
+        // Link Google provider to existing user if not already linked
+        const updateData: any = {
           avatarUrl: gUser.picture,
           lastLoginAt: new Date().toISOString(),
-        } as any);
+        };
+        if (!user.providerId) {
+          updateData.authProvider = "google";
+          updateData.providerId = gUser.id;
+        }
+        await storage.updateUser(user.id, updateData);
         const ip = req.headers["x-forwarded-for"] as string || req.socket.remoteAddress || "Unknown";
         sendLoginAlertEmail(user.id, user.email, user.displayName || user.username, ip);
       }

@@ -22,9 +22,10 @@ import {
 } from "@shared/schema";
 import { drizzle } from "drizzle-orm/better-sqlite3";
 import Database from "better-sqlite3";
-import { eq, desc, gte } from "drizzle-orm";
+import { eq, desc, gte, and } from "drizzle-orm";
 
-const sqlite = new Database("data.db");
+const DB_PATH = process.env.NODE_ENV === "production" ? "/data/data.db" : "data.db";
+const sqlite = new Database(DB_PATH);
 sqlite.pragma("journal_mode = WAL");
 
 // Auto-create ALL tables if they don't exist (covers fresh deploys)
@@ -853,7 +854,7 @@ export interface IStorage {
   getUserPlan(userId: number): Promise<UserPlan | undefined>;
   createUserPlan(plan: InsertUserPlan): Promise<UserPlan>;
   updateUserPlan(id: number, data: Partial<InsertUserPlan>): Promise<UserPlan | undefined>;
-  updateUser(id: number, data: Partial<{ tier: string; stripeCustomerId: string; subscriptionId: string; role: string; avatarUrl: string; displayName: string; lastLoginAt: string; passwordHash: string; authProvider: string; providerId: string }>): Promise<User | undefined>;
+  updateUser(id: number, data: Partial<{ tier: string; stripeCustomerId: string; subscriptionId: string; role: string; avatarUrl: string; displayName: string; lastLoginAt: string; passwordHash: string; authProvider: string; providerId: string; emailVerified: number }>): Promise<User | undefined>;
   // Workflow Runs
   getWorkflowRuns(workflowId: number): Promise<WorkflowRun[]>;
   getWorkflowRun(id: number): Promise<WorkflowRun | undefined>;
@@ -1161,7 +1162,7 @@ export class DatabaseStorage implements IStorage {
   }
 
   // Update User
-  async updateUser(id: number, data: Partial<{ tier: string; stripeCustomerId: string; subscriptionId: string; role: string; avatarUrl: string; displayName: string; lastLoginAt: string; passwordHash: string; authProvider: string; providerId: string }>): Promise<User | undefined> {
+  async updateUser(id: number, data: Partial<{ tier: string; stripeCustomerId: string; subscriptionId: string; role: string; avatarUrl: string; displayName: string; lastLoginAt: string; passwordHash: string; authProvider: string; providerId: string; emailVerified: number }>): Promise<User | undefined> {
     return db.update(users).set(data).where(eq(users.id, id)).returning().get();
   }
 
@@ -1226,7 +1227,9 @@ export class DatabaseStorage implements IStorage {
     return db.select().from(users).where(eq(users.email, email)).get();
   }
   async getUserByProviderId(provider: string, providerId: string) {
-    return db.select().from(users).where(eq(users.providerId, providerId)).get();
+    return db.select().from(users).where(
+      and(eq(users.authProvider, provider), eq(users.providerId, providerId))
+    ).get();
   }
   async getAllUsers() {
     return db.select().from(users).orderBy(desc(users.id)).all();
