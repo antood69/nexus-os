@@ -325,6 +325,38 @@ sqlite.exec(`
     created_at TEXT DEFAULT (datetime('now')),
     updated_at TEXT DEFAULT (datetime('now'))
   );
+
+  CREATE TABLE IF NOT EXISTS trades (
+    id TEXT PRIMARY KEY,
+    user_id INTEGER NOT NULL,
+    symbol TEXT NOT NULL,
+    direction TEXT NOT NULL,
+    entry_price REAL NOT NULL,
+    exit_price REAL,
+    quantity REAL NOT NULL,
+    entry_time TEXT NOT NULL,
+    exit_time TEXT,
+    gross_pnl REAL,
+    fees REAL DEFAULT 0,
+    net_pnl REAL,
+    strategy_tag TEXT,
+    notes TEXT,
+    screenshot_url TEXT,
+    import_source TEXT DEFAULT 'manual',
+    created_at TEXT DEFAULT (datetime('now'))
+  );
+
+  CREATE TABLE IF NOT EXISTS trading_sessions (
+    id TEXT PRIMARY KEY,
+    user_id INTEGER NOT NULL,
+    date TEXT NOT NULL,
+    total_trades INTEGER DEFAULT 0,
+    winning_trades INTEGER DEFAULT 0,
+    gross_pnl REAL DEFAULT 0,
+    net_pnl REAL DEFAULT 0,
+    notes TEXT,
+    created_at TEXT DEFAULT (datetime('now'))
+  );
 `);
 
 // Safe ALTER TABLE for existing DBs that lack new columns
@@ -372,6 +404,45 @@ export interface CustomTool {
   lastUsedAt: string | null;
   createdAt: string;
   updatedAt: string;
+}
+
+// ── Trade Journal types ──────────────────────────────────────────────────────
+export interface Trade {
+  id: string;
+  userId: number;
+  symbol: string;
+  direction: string; // 'long' | 'short'
+  entryPrice: number;
+  exitPrice: number | null;
+  quantity: number;
+  entryTime: string;
+  exitTime: string | null;
+  grossPnl: number | null;
+  fees: number;
+  netPnl: number | null;
+  strategyTag: string | null;
+  notes: string | null;
+  screenshotUrl: string | null;
+  importSource: string;
+  createdAt: string;
+}
+
+export interface TradingStats {
+  totalTrades: number;
+  winningTrades: number;
+  losingTrades: number;
+  winRate: number;
+  avgWin: number;
+  avgLoss: number;
+  profitFactor: number;
+  grossPnl: number;
+  netPnl: number;
+  bestTrade: number;
+  worstTrade: number;
+  avgRR: number;
+  currentWinStreak: number;
+  currentLossStreak: number;
+  bestWinStreak: number;
 }
 
 export interface UserPreferences {
@@ -514,6 +585,18 @@ export interface IStorage {
   // User Preferences
   getUserPreferences(userId: number): Promise<UserPreferences>;
   updateUserPreferences(userId: number, data: Partial<UserPreferences>): Promise<UserPreferences>;
+  // Trades
+  createTrade(data: { userId: number; symbol: string; direction: string; entryPrice: number; exitPrice?: number | null; quantity: number; entryTime: string; exitTime?: string | null; fees?: number; strategyTag?: string | null; notes?: string | null; screenshotUrl?: string | null; importSource?: string }): Promise<Trade>;
+  getTrade(id: string): Promise<Trade | undefined>;
+  getTradesByUser(userId: number, opts?: { symbol?: string; direction?: string; startDate?: string; endDate?: string; limit?: number; offset?: number }): Promise<Trade[]>;
+  updateTrade(id: string, data: Partial<Omit<Trade, 'id' | 'userId' | 'createdAt'>>): Promise<Trade | undefined>;
+  deleteTrade(id: string): Promise<void>;
+  closeTrade(id: string, exitPrice: number, exitTime: string, fees?: number): Promise<Trade | undefined>;
+  getTradingStats(userId: number): Promise<TradingStats>;
+  getEquityCurve(userId: number): Promise<{ date: string; cumulativePnl: number }[]>;
+  getMonthlyPnl(userId: number): Promise<{ month: string; pnl: number }[]>;
+  getPnlBySymbol(userId: number): Promise<{ symbol: string; pnl: number; tradeCount: number }[]>;
+  getPnlByDayOfWeek(userId: number): Promise<{ day: string; pnl: number; tradeCount: number }[]>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -1202,6 +1285,241 @@ export class DatabaseStorage implements IStorage {
       }
     }
     return this.getUserPreferences(userId);
+  }
+
+  // ── Trades ────────────────────────────────────────────────────────────────────
+  private _calcPnl(direction: string, entryPrice: number, exitPrice: number, quantity: number, fees: number) {
+    const grossPnl = direction === 'long'
+      ? (exitPrice - entryPrice) * quantity
+      : (entryPrice - exitPrice) * quantity;
+    const netPnl = grossPnl - fees;
+    return { grossPnl, netPnl };
+  }
+
+  private _mapTrade(row: any): Trade {
+    return {
+      id: row.id,
+      userId: row.user_id,
+      symbol: row.symbol,
+      direction: row.direction,
+      entryPrice: row.entry_price,
+      exitPrice: row.exit_price ?? null,
+      quantity: row.quantity,
+      entryTime: row.entry_time,
+      exitTime: row.exit_time ?? null,
+      grossPnl: row.gross_pnl ?? null,
+      fees: row.fees ?? 0,
+      netPnl: row.net_pnl ?? null,
+      strategyTag: row.strategy_tag ?? null,
+      notes: row.notes ?? null,
+      screenshotUrl: row.screenshot_url ?? null,
+      importSource: row.import_source ?? 'manual',
+      createdAt: row.created_at,
+    };
+  }
+
+  async createTrade(data: { userId: number; symbol: string; direction: string; entryPrice: number; exitPrice?: number | null; quantity: number; entryTime: string; exitTime?: string | null; fees?: number; strategyTag?: string | null; notes?: string | null; screenshotUrl?: string | null; importSource?: string }): Promise<Trade> {
+    const { v4: uuidv4 } = await import('uuid');
+    const id = uuidv4();
+    const fees = data.fees ?? 0;
+    let grossPnl: number | null = null;
+    let netPnl: number | null = null;
+    if (data.exitPrice != null) {
+      const calc = this._calcPnl(data.direction, data.entryPrice, data.exitPrice, data.quantity, fees);
+      grossPnl = calc.grossPnl;
+      netPnl = calc.netPnl;
+    }
+    sqlite.prepare(`
+      INSERT INTO trades (id, user_id, symbol, direction, entry_price, exit_price, quantity, entry_time, exit_time, gross_pnl, fees, net_pnl, strategy_tag, notes, screenshot_url, import_source)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    `).run(
+      id, data.userId, data.symbol, data.direction,
+      data.entryPrice, data.exitPrice ?? null, data.quantity,
+      data.entryTime, data.exitTime ?? null,
+      grossPnl, fees, netPnl,
+      data.strategyTag ?? null, data.notes ?? null,
+      data.screenshotUrl ?? null, data.importSource ?? 'manual'
+    );
+    return this.getTrade(id) as Promise<Trade>;
+  }
+
+  async getTrade(id: string): Promise<Trade | undefined> {
+    const row = sqlite.prepare('SELECT * FROM trades WHERE id = ?').get(id) as any;
+    if (!row) return undefined;
+    return this._mapTrade(row);
+  }
+
+  async getTradesByUser(userId: number, opts: { symbol?: string; direction?: string; startDate?: string; endDate?: string; limit?: number; offset?: number } = {}): Promise<Trade[]> {
+    let query = 'SELECT * FROM trades WHERE user_id = ?';
+    const params: any[] = [userId];
+    if (opts.symbol) { query += ' AND symbol = ?'; params.push(opts.symbol); }
+    if (opts.direction) { query += ' AND direction = ?'; params.push(opts.direction); }
+    if (opts.startDate) { query += ' AND entry_time >= ?'; params.push(opts.startDate); }
+    if (opts.endDate) { query += ' AND entry_time <= ?'; params.push(opts.endDate); }
+    query += ' ORDER BY entry_time DESC';
+    query += ` LIMIT ${opts.limit ?? 100} OFFSET ${opts.offset ?? 0}`;
+    const rows = sqlite.prepare(query).all(...params) as any[];
+    return rows.map(r => this._mapTrade(r));
+  }
+
+  async updateTrade(id: string, data: Partial<Omit<Trade, 'id' | 'userId' | 'createdAt'>>): Promise<Trade | undefined> {
+    const existing = await this.getTrade(id);
+    if (!existing) return undefined;
+    const colMap: Record<string, string> = {
+      symbol: 'symbol', direction: 'direction', entryPrice: 'entry_price',
+      exitPrice: 'exit_price', quantity: 'quantity', entryTime: 'entry_time',
+      exitTime: 'exit_time', grossPnl: 'gross_pnl', fees: 'fees',
+      netPnl: 'net_pnl', strategyTag: 'strategy_tag', notes: 'notes',
+      screenshotUrl: 'screenshot_url', importSource: 'import_source',
+    };
+    const merged = { ...existing, ...data };
+    // Recalculate P&L if exit price is set
+    if (merged.exitPrice != null) {
+      const calc = this._calcPnl(merged.direction, merged.entryPrice, merged.exitPrice, merged.quantity, merged.fees ?? 0);
+      merged.grossPnl = calc.grossPnl;
+      merged.netPnl = calc.netPnl;
+    }
+    const fields: string[] = [];
+    const values: any[] = [];
+    for (const [key, col] of Object.entries(colMap)) {
+      if (key in data || key === 'grossPnl' || key === 'netPnl') {
+        fields.push(`${col} = ?`);
+        values.push((merged as any)[key] ?? null);
+      }
+    }
+    if (fields.length > 0) {
+      values.push(id);
+      sqlite.prepare(`UPDATE trades SET ${fields.join(', ')} WHERE id = ?`).run(...values);
+    }
+    return this.getTrade(id);
+  }
+
+  async deleteTrade(id: string): Promise<void> {
+    sqlite.prepare('DELETE FROM trades WHERE id = ?').run(id);
+  }
+
+  async closeTrade(id: string, exitPrice: number, exitTime: string, fees = 0): Promise<Trade | undefined> {
+    const trade = await this.getTrade(id);
+    if (!trade) return undefined;
+    const totalFees = (trade.fees ?? 0) + fees;
+    const { grossPnl, netPnl } = this._calcPnl(trade.direction, trade.entryPrice, exitPrice, trade.quantity, totalFees);
+    sqlite.prepare(`
+      UPDATE trades SET exit_price = ?, exit_time = ?, fees = ?, gross_pnl = ?, net_pnl = ? WHERE id = ?
+    `).run(exitPrice, exitTime, totalFees, grossPnl, netPnl, id);
+    return this.getTrade(id);
+  }
+
+  async getTradingStats(userId: number): Promise<TradingStats> {
+    const trades = await this.getTradesByUser(userId, { limit: 10000 });
+    const closed = trades.filter(t => t.netPnl !== null);
+    const winning = closed.filter(t => (t.netPnl ?? 0) > 0);
+    const losing = closed.filter(t => (t.netPnl ?? 0) < 0);
+    const totalPnl = closed.reduce((s, t) => s + (t.grossPnl ?? 0), 0);
+    const netPnl = closed.reduce((s, t) => s + (t.netPnl ?? 0), 0);
+    const avgWin = winning.length > 0 ? winning.reduce((s, t) => s + (t.netPnl ?? 0), 0) / winning.length : 0;
+    const avgLoss = losing.length > 0 ? Math.abs(losing.reduce((s, t) => s + (t.netPnl ?? 0), 0)) / losing.length : 0;
+    const profitFactor = avgLoss > 0 ? (avgWin * winning.length) / (avgLoss * losing.length) : winning.length > 0 ? Infinity : 0;
+    const bestTrade = closed.length > 0 ? Math.max(...closed.map(t => t.netPnl ?? 0)) : 0;
+    const worstTrade = closed.length > 0 ? Math.min(...closed.map(t => t.netPnl ?? 0)) : 0;
+    // Avg R:R (only trades with both entry and exit)
+    const rrTrades = closed.filter(t => t.netPnl !== null && (t.netPnl ?? 0) !== 0);
+    const avgRR = rrTrades.length > 0 ? rrTrades.reduce((s, t) => s + ((t.netPnl ?? 0) > 0 ? (t.netPnl ?? 0) / avgLoss : 0), 0) / rrTrades.length : 0;
+    // Streak calculation (sorted by entry_time asc)
+    const sorted = [...closed].sort((a, b) => a.entryTime.localeCompare(b.entryTime));
+    let currentWinStreak = 0, currentLossStreak = 0, bestWinStreak = 0, streak = 0, lStreak = 0;
+    for (let i = sorted.length - 1; i >= 0; i--) {
+      const pnl = sorted[i].netPnl ?? 0;
+      if (i === sorted.length - 1) {
+        if (pnl > 0) { currentWinStreak = 1; } else if (pnl < 0) { currentLossStreak = 1; }
+      } else {
+        const prev = sorted[i + 1].netPnl ?? 0;
+        if (pnl > 0 && prev > 0) currentWinStreak++;
+        else if (pnl < 0 && prev < 0) currentLossStreak++;
+        else break;
+      }
+    }
+    // Best win streak (pass through all)
+    streak = 0;
+    for (const t of sorted) {
+      if ((t.netPnl ?? 0) > 0) { streak++; if (streak > bestWinStreak) bestWinStreak = streak; }
+      else streak = 0;
+    }
+    return {
+      totalTrades: trades.length,
+      winningTrades: winning.length,
+      losingTrades: losing.length,
+      winRate: closed.length > 0 ? (winning.length / closed.length) * 100 : 0,
+      avgWin,
+      avgLoss,
+      profitFactor: isFinite(profitFactor) ? profitFactor : 999,
+      grossPnl: totalPnl,
+      netPnl,
+      bestTrade,
+      worstTrade,
+      avgRR,
+      currentWinStreak,
+      currentLossStreak,
+      bestWinStreak,
+    };
+  }
+
+  async getEquityCurve(userId: number): Promise<{ date: string; cumulativePnl: number }[]> {
+    const rows = sqlite.prepare(`
+      SELECT date(entry_time) as date, SUM(net_pnl) as daily_pnl
+      FROM trades
+      WHERE user_id = ? AND net_pnl IS NOT NULL
+      GROUP BY date(entry_time)
+      ORDER BY date(entry_time) ASC
+    `).all(userId) as any[];
+    let cumulative = 0;
+    return rows.map(r => {
+      cumulative += r.daily_pnl ?? 0;
+      return { date: r.date, cumulativePnl: Math.round(cumulative * 100) / 100 };
+    });
+  }
+
+  async getMonthlyPnl(userId: number): Promise<{ month: string; pnl: number }[]> {
+    const rows = sqlite.prepare(`
+      SELECT strftime('%Y-%m', entry_time) as month, SUM(net_pnl) as pnl
+      FROM trades
+      WHERE user_id = ? AND net_pnl IS NOT NULL
+      GROUP BY strftime('%Y-%m', entry_time)
+      ORDER BY month ASC
+    `).all(userId) as any[];
+    return rows.map(r => ({ month: r.month, pnl: Math.round((r.pnl ?? 0) * 100) / 100 }));
+  }
+
+  async getPnlBySymbol(userId: number): Promise<{ symbol: string; pnl: number; tradeCount: number }[]> {
+    const rows = sqlite.prepare(`
+      SELECT symbol, SUM(net_pnl) as pnl, COUNT(*) as trade_count
+      FROM trades
+      WHERE user_id = ? AND net_pnl IS NOT NULL
+      GROUP BY symbol
+      ORDER BY pnl DESC
+    `).all(userId) as any[];
+    return rows.map(r => ({ symbol: r.symbol, pnl: Math.round((r.pnl ?? 0) * 100) / 100, tradeCount: r.trade_count }));
+  }
+
+  async getPnlByDayOfWeek(userId: number): Promise<{ day: string; pnl: number; tradeCount: number }[]> {
+    const rows = sqlite.prepare(`
+      SELECT
+        CASE cast(strftime('%w', entry_time) as integer)
+          WHEN 0 THEN 'Sunday'
+          WHEN 1 THEN 'Monday'
+          WHEN 2 THEN 'Tuesday'
+          WHEN 3 THEN 'Wednesday'
+          WHEN 4 THEN 'Thursday'
+          WHEN 5 THEN 'Friday'
+          ELSE 'Saturday'
+        END as day,
+        SUM(net_pnl) as pnl,
+        COUNT(*) as trade_count
+      FROM trades
+      WHERE user_id = ? AND net_pnl IS NOT NULL
+      GROUP BY strftime('%w', entry_time)
+      ORDER BY cast(strftime('%w', entry_time) as integer)
+    `).all(userId) as any[];
+    return rows.map(r => ({ day: r.day, pnl: Math.round((r.pnl ?? 0) * 100) / 100, tradeCount: r.trade_count }));
   }
 }
 

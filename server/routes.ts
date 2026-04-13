@@ -629,5 +629,103 @@ export async function registerRoutes(
   // === STRIPE ===
   registerStripeRoutes(app);
 
+  // ── Trading Journal ──────────────────────────────────────────────────────────────────
+  app.get("/api/trades", async (req, res) => {
+    const userId = req.user?.id || 1;
+    const trades = await storage.getTradesByUser(userId, {
+      symbol: req.query.symbol as string | undefined,
+      direction: req.query.direction as string | undefined,
+      startDate: req.query.startDate as string | undefined,
+      endDate: req.query.endDate as string | undefined,
+      limit: req.query.limit ? Number(req.query.limit) : 100,
+      offset: req.query.offset ? Number(req.query.offset) : 0,
+    });
+    res.json(trades);
+  });
+
+  app.get("/api/trades/stats", async (req, res) => {
+    const userId = req.user?.id || 1;
+    const stats = await storage.getTradingStats(userId);
+    res.json(stats);
+  });
+
+  app.get("/api/trades/equity-curve", async (req, res) => {
+    const userId = req.user?.id || 1;
+    const curve = await storage.getEquityCurve(userId);
+    res.json(curve);
+  });
+
+  app.get("/api/trades/monthly-pnl", async (req, res) => {
+    const userId = req.user?.id || 1;
+    const monthly = await storage.getMonthlyPnl(userId);
+    res.json(monthly);
+  });
+
+  app.get("/api/trades/by-symbol", async (req, res) => {
+    const userId = req.user?.id || 1;
+    const bySymbol = await storage.getPnlBySymbol(userId);
+    res.json(bySymbol);
+  });
+
+  app.get("/api/trades/by-day", async (req, res) => {
+    const userId = req.user?.id || 1;
+    const byDay = await storage.getPnlByDayOfWeek(userId);
+    res.json(byDay);
+  });
+
+  app.post("/api/trades/import", async (req, res) => {
+    const userId = req.user?.id || 1;
+    const { trades } = req.body;
+    if (!Array.isArray(trades)) return res.status(400).json({ error: "trades must be an array" });
+    const results = [];
+    for (const t of trades) {
+      const trade = await storage.createTrade({ ...t, userId, importSource: 'csv_import' });
+      results.push(trade);
+    }
+    res.status(201).json({ imported: results.length, trades: results });
+  });
+
+  app.post("/api/trades", async (req, res) => {
+    const userId = req.user?.id || 1;
+    try {
+      const trade = await storage.createTrade({ ...req.body, userId });
+      res.status(201).json(trade);
+    } catch (err: any) {
+      res.status(400).json({ error: err.message });
+    }
+  });
+
+  app.get("/api/trades/:id", async (req, res) => {
+    const userId = req.user?.id || 1;
+    const trade = await storage.getTrade(req.params.id);
+    if (!trade || trade.userId !== userId) return res.status(404).json({ error: "Trade not found" });
+    res.json(trade);
+  });
+
+  app.put("/api/trades/:id", async (req, res) => {
+    const userId = req.user?.id || 1;
+    const trade = await storage.getTrade(req.params.id);
+    if (!trade || trade.userId !== userId) return res.status(403).json({ error: "Not authorized" });
+    const updated = await storage.updateTrade(req.params.id, req.body);
+    res.json(updated);
+  });
+
+  app.delete("/api/trades/:id", async (req, res) => {
+    const userId = req.user?.id || 1;
+    const trade = await storage.getTrade(req.params.id);
+    if (!trade || trade.userId !== userId) return res.status(403).json({ error: "Not authorized" });
+    await storage.deleteTrade(req.params.id);
+    res.json({ ok: true });
+  });
+
+  app.post("/api/trades/:id/close", async (req, res) => {
+    const userId = req.user?.id || 1;
+    const { exitPrice, exitTime, fees } = req.body;
+    const trade = await storage.getTrade(req.params.id);
+    if (!trade || trade.userId !== userId) return res.status(403).json({ error: "Not authorized" });
+    const closed = await storage.closeTrade(req.params.id, exitPrice, exitTime || new Date().toISOString(), fees || 0);
+    res.json(closed);
+  });
+
   return httpServer;
 }
