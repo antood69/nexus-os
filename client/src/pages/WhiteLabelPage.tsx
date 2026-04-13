@@ -6,6 +6,7 @@ import {
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { apiRequest } from "@/lib/queryClient";
+import AIChatPanel from "@/components/AIChatPanel";
 
 type WhiteLabelConfig = {
   id: string;
@@ -388,6 +389,11 @@ export default function WhiteLabelPage() {
           </div>
         </div>
       )}
+      <AIChatPanel
+        systemPrompt="You are a brand consultant. Help the user design their white-label platform. Ask about their brand identity, target audience, color preferences, and which features they want to enable."
+        placeholder="Describe your brand vision..."
+        pageContext="white-label"
+      />
     </div>
   );
 }

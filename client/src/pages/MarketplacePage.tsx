@@ -180,7 +180,8 @@ export default function MarketplacePage() {
     queryKey: ["/api/marketplace/categories"],
     queryFn: async () => {
       const res = await apiRequest("GET", "/api/marketplace/categories");
-      return res.json();
+      const json = await res.json();
+      return json.categories ?? json;
     },
   });
 

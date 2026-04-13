@@ -512,12 +512,74 @@ sqlite.exec(`
     credentials TEXT,
     created_at TEXT DEFAULT (datetime('now'))
   );
+
+  CREATE TABLE IF NOT EXISTS products (
+    id TEXT PRIMARY KEY,
+    name TEXT NOT NULL,
+    description TEXT,
+    price_cents INTEGER NOT NULL,
+    category TEXT,
+    features TEXT,
+    is_active INTEGER DEFAULT 1,
+    created_at TEXT DEFAULT (datetime('now'))
+  );
+
+  CREATE TABLE IF NOT EXISTS user_products (
+    id TEXT PRIMARY KEY DEFAULT (lower(hex(randomblob(16)))),
+    user_id INTEGER NOT NULL,
+    product_id TEXT NOT NULL,
+    stripe_payment_id TEXT,
+    price_cents INTEGER NOT NULL,
+    status TEXT DEFAULT 'active',
+    purchased_at TEXT DEFAULT (datetime('now')),
+    expires_at TEXT
+  );
+
+  CREATE TABLE IF NOT EXISTS workflow_presets (
+    id TEXT PRIMARY KEY,
+    product_id TEXT,
+    name TEXT NOT NULL,
+    description TEXT,
+    category TEXT,
+    template_data TEXT NOT NULL,
+    icon TEXT,
+    created_at TEXT DEFAULT (datetime('now'))
+  );
 `);
+
+// Seed products
+try {
+  sqlite.exec(`INSERT OR IGNORE INTO products (id, name, description, price_cents, category, features) VALUES ('meme-coin-engine', 'Meme Coin Trading Engine', 'Complete meme coin trading workflow suite with signal detection, risk management, and execution templates. Includes 5 pre-built workflow presets.', 799, 'trading', '["Token Scanner Workflow","Smart Money Tracker","Auto-Exit Strategy","Social Sentiment Pipeline","Multi-Chain Sniper"]')`);
+} catch (_) {}
+
+// Seed workflow presets for meme coin engine
+try {
+  sqlite.exec(`INSERT OR IGNORE INTO workflow_presets (id, product_id, name, description, category, template_data, icon) VALUES ('preset-token-scanner', 'meme-coin-engine', 'Token Scanner', 'Monitors new token launches, filters by liquidity and volume, generates trade signals', 'trading', '{"nodes":[{"id":"trigger","type":"trigger","data":{"label":"New Token Alert"},"position":{"x":50,"y":100}},{"id":"filter","type":"logic","data":{"label":"Liquidity Filter"},"position":{"x":300,"y":100}},{"id":"signal","type":"output","data":{"label":"Generate Signal"},"position":{"x":550,"y":100}}],"edges":[{"source":"trigger","target":"filter"},{"source":"filter","target":"signal"}]}', 'Search')`);
+  sqlite.exec(`INSERT OR IGNORE INTO workflow_presets (id, product_id, name, description, category, template_data, icon) VALUES ('preset-smart-money', 'meme-coin-engine', 'Smart Money Tracker', 'Watches whale wallets for large buys and alerts you in real-time', 'trading', '{"nodes":[{"id":"trigger","type":"trigger","data":{"label":"Wallet Monitor"},"position":{"x":50,"y":100}},{"id":"agent","type":"agent","data":{"label":"Whale Detector"},"position":{"x":300,"y":100}},{"id":"alert","type":"output","data":{"label":"Alert Owner"},"position":{"x":550,"y":100}}],"edges":[{"source":"trigger","target":"agent"},{"source":"agent","target":"alert"}]}', 'Eye')`);
+  sqlite.exec(`INSERT OR IGNORE INTO workflow_presets (id, product_id, name, description, category, template_data, icon) VALUES ('preset-auto-exit', 'meme-coin-engine', 'Auto-Exit Strategy', 'Monitors open positions and applies take-profit and stop-loss rules automatically', 'trading', '{"nodes":[{"id":"trigger","type":"trigger","data":{"label":"Position Monitor"},"position":{"x":50,"y":100}},{"id":"check","type":"logic","data":{"label":"TP/SL Check"},"position":{"x":300,"y":100}},{"id":"exit","type":"output","data":{"label":"Execute Exit"},"position":{"x":550,"y":100}}],"edges":[{"source":"trigger","target":"check"},{"source":"check","target":"exit"}]}', 'ShieldCheck')`);
+  sqlite.exec(`INSERT OR IGNORE INTO workflow_presets (id, product_id, name, description, category, template_data, icon) VALUES ('preset-sentiment', 'meme-coin-engine', 'Social Sentiment Pipeline', 'Scrapes social mentions, classifies sentiment with AI, generates buy or skip signals', 'trading', '{"nodes":[{"id":"trigger","type":"trigger","data":{"label":"Social Scraper"},"position":{"x":50,"y":100}},{"id":"agent","type":"agent","data":{"label":"Sentiment Analyzer"},"position":{"x":300,"y":100}},{"id":"decision","type":"logic","data":{"label":"Signal Gate"},"position":{"x":550,"y":100}},{"id":"output","type":"output","data":{"label":"Buy Signal"},"position":{"x":800,"y":100}}],"edges":[{"source":"trigger","target":"agent"},{"source":"agent","target":"decision"},{"source":"decision","target":"output"}]}', 'MessageSquare')`);
+  sqlite.exec(`INSERT OR IGNORE INTO workflow_presets (id, product_id, name, description, category, template_data, icon) VALUES ('preset-sniper', 'meme-coin-engine', 'Multi-Chain Sniper', 'Cross-chain token scanner for fastest entry execution on new launches', 'trading', '{"nodes":[{"id":"trigger","type":"trigger","data":{"label":"Chain Scanner"},"position":{"x":50,"y":100}},{"id":"validate","type":"logic","data":{"label":"Contract Validator"},"position":{"x":300,"y":100}},{"id":"execute","type":"output","data":{"label":"Execute Buy"},"position":{"x":550,"y":100}}],"edges":[{"source":"trigger","target":"validate"},{"source":"validate","target":"execute"}]}', 'Zap')`);
+} catch (_) {}
 
 // Safe ALTER TABLE for existing DBs that lack new columns
 const safeAlter = (sql: string) => {
   try { sqlite.exec(sql); } catch (_) { /* column already exists */ }
 };
+
+// Marketplace listing type columns
+safeAlter("ALTER TABLE marketplace_listings ADD COLUMN listing_type TEXT DEFAULT 'service'");
+safeAlter("ALTER TABLE marketplace_listings ADD COLUMN attached_item_id TEXT");
+safeAlter("ALTER TABLE marketplace_listings ADD COLUMN attached_item_data TEXT");
+
+// Fiverr orders pipeline columns
+safeAlter("ALTER TABLE fiverr_orders ADD COLUMN client_name TEXT");
+safeAlter("ALTER TABLE fiverr_orders ADD COLUMN client_email TEXT");
+safeAlter("ALTER TABLE fiverr_orders ADD COLUMN gig_type TEXT");
+safeAlter("ALTER TABLE fiverr_orders ADD COLUMN deadline TEXT");
+safeAlter("ALTER TABLE fiverr_orders ADD COLUMN ai_output TEXT");
+safeAlter("ALTER TABLE fiverr_orders ADD COLUMN revision_notes TEXT");
+safeAlter("ALTER TABLE fiverr_orders ADD COLUMN delivery_message TEXT");
+
 // Users table migration for existing DBs
 safeAlter("ALTER TABLE users ADD COLUMN email TEXT NOT NULL DEFAULT ''");
 safeAlter("ALTER TABLE users ADD COLUMN password_hash TEXT");
@@ -550,6 +612,7 @@ try {
 } catch (_) {}
 
 // Workflows table migration
+safeAlter("ALTER TABLE user_preferences ADD COLUMN trading_disclaimer_ack INTEGER NOT NULL DEFAULT 0");
 safeAlter("ALTER TABLE workflows ADD COLUMN canvas_state TEXT");
 safeAlter("ALTER TABLE workflows ADD COLUMN is_template INTEGER DEFAULT 0");
 safeAlter("ALTER TABLE workflows ADD COLUMN template_category TEXT");
@@ -1645,6 +1708,7 @@ export class DatabaseStorage implements IStorage {
       glassOpacity: row.glass_opacity,
       sidebarPosition: row.sidebar_position,
       compactMode: row.compact_mode,
+      tradingDisclaimerAck: row.trading_disclaimer_ack ?? 0,
       createdAt: row.created_at,
       updatedAt: row.updated_at,
     };
@@ -1680,6 +1744,7 @@ export class DatabaseStorage implements IStorage {
       if (data.glassOpacity !== undefined) { fields.push('glass_opacity = ?'); values.push(data.glassOpacity); }
       if (data.sidebarPosition !== undefined) { fields.push('sidebar_position = ?'); values.push(data.sidebarPosition); }
       if (data.compactMode !== undefined) { fields.push('compact_mode = ?'); values.push(data.compactMode); }
+      if ((data as any).tradingDisclaimerAck !== undefined) { fields.push('trading_disclaimer_ack = ?'); values.push((data as any).tradingDisclaimerAck); }
       if (fields.length > 0) {
         fields.push('updated_at = ?');
         values.push(now);
@@ -2591,6 +2656,51 @@ export class DatabaseStorage implements IStorage {
 
   getStackExecutionLogs(stackId: string): any[] {
     return sqlite.prepare('SELECT * FROM stack_execution_log WHERE stack_id = ? ORDER BY executed_at DESC LIMIT 50').all(stackId) as any[];
+  }
+
+  // ── Products ────────────────────────────────────────────────────────────────
+  async getProduct(id: string): Promise<any> {
+    const row = sqlite.prepare('SELECT * FROM products WHERE id = ?').get(id) as any;
+    if (!row) return undefined;
+    return { id: row.id, name: row.name, description: row.description, priceCents: row.price_cents, category: row.category, features: row.features, isActive: row.is_active, createdAt: row.created_at };
+  }
+
+  async getProducts(): Promise<any[]> {
+    const rows = sqlite.prepare('SELECT * FROM products WHERE is_active = 1 ORDER BY created_at DESC').all() as any[];
+    return rows.map(r => ({ id: r.id, name: r.name, description: r.description, priceCents: r.price_cents, category: r.category, features: r.features, isActive: r.is_active, createdAt: r.created_at }));
+  }
+
+  async getUserProduct(userId: number, productId: string): Promise<any> {
+    const row = sqlite.prepare('SELECT * FROM user_products WHERE user_id = ? AND product_id = ? AND status = ?').get(userId, productId, 'active') as any;
+    if (!row) return undefined;
+    return { id: row.id, userId: row.user_id, productId: row.product_id, stripePaymentId: row.stripe_payment_id, priceCents: row.price_cents, status: row.status, purchasedAt: row.purchased_at, expiresAt: row.expires_at };
+  }
+
+  async getUserProducts(userId: number): Promise<any[]> {
+    const rows = sqlite.prepare('SELECT * FROM user_products WHERE user_id = ? ORDER BY purchased_at DESC').all(userId) as any[];
+    return rows.map(r => ({ id: r.id, userId: r.user_id, productId: r.product_id, stripePaymentId: r.stripe_payment_id, priceCents: r.price_cents, status: r.status, purchasedAt: r.purchased_at, expiresAt: r.expires_at }));
+  }
+
+  async createUserProduct(data: { userId: number; productId: string; stripePaymentId?: string; priceCents: number }): Promise<any> {
+    const id = Math.random().toString(36).slice(2) + Date.now().toString(36);
+    sqlite.prepare('INSERT INTO user_products (id, user_id, product_id, stripe_payment_id, price_cents) VALUES (?, ?, ?, ?, ?)').run(id, data.userId, data.productId, data.stripePaymentId ?? null, data.priceCents);
+    return this.getUserProduct(data.userId, data.productId);
+  }
+
+  // ── Workflow Presets ────────────────────────────────────────────────────────
+  async getWorkflowPresets(productId?: string): Promise<any[]> {
+    if (productId) {
+      const rows = sqlite.prepare('SELECT * FROM workflow_presets WHERE product_id = ? ORDER BY created_at').all(productId) as any[];
+      return rows.map(r => ({ id: r.id, productId: r.product_id, name: r.name, description: r.description, category: r.category, templateData: r.template_data, icon: r.icon, createdAt: r.created_at }));
+    }
+    const rows = sqlite.prepare('SELECT * FROM workflow_presets ORDER BY created_at').all() as any[];
+    return rows.map(r => ({ id: r.id, productId: r.product_id, name: r.name, description: r.description, category: r.category, templateData: r.template_data, icon: r.icon, createdAt: r.created_at }));
+  }
+
+  async getWorkflowPreset(id: string): Promise<any> {
+    const row = sqlite.prepare('SELECT * FROM workflow_presets WHERE id = ?').get(id) as any;
+    if (!row) return undefined;
+    return { id: row.id, productId: row.product_id, name: row.name, description: row.description, category: row.category, templateData: row.template_data, icon: row.icon, createdAt: row.created_at };
   }
 }
 

@@ -24,6 +24,7 @@ import type { Workflow, Agent } from "@shared/schema";
 import type { Node, Edge } from "@xyflow/react";
 import WorkflowCanvas from "@/components/WorkflowCanvas";
 import NodePalette from "@/components/NodePalette";
+import AIChatPanel from "@/components/AIChatPanel";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -1063,6 +1064,11 @@ export default function WorkflowDetailPage() {
           </Tabs>
         </div>
       )}
+      <AIChatPanel
+        systemPrompt="You are a workflow automation expert. Help the user design their workflow. Ask about what they want to automate, what triggers it, what steps are needed, and what the output should be."
+        placeholder="Describe your workflow..."
+        pageContext="workflow-detail"
+      />
     </div>
   );
 }

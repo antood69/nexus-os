@@ -619,6 +619,11 @@ export function JarvisWidget() {
   const [audioAmplitude, setAudioAmplitude] = useState(0);
   const [location] = useLocation();
 
+  // Draggable state
+  const [dragPos, setDragPos] = useState({ x: 0, y: 0 });
+  const [isDragging, setIsDragging] = useState(false);
+  const dragRef = useRef<{ startX: number; startY: number; startPosX: number; startPosY: number } | null>(null);
+
   const inputRef = useRef<HTMLInputElement>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const recognitionRef = useRef<any>(null);
@@ -631,6 +636,32 @@ export function JarvisWidget() {
     setVisible(true);
     requestAnimationFrame(() => requestAnimationFrame(() => setAnimIn(true)));
   }, []);
+
+  const handleTouchStart = useCallback((e: React.TouchEvent) => {
+    const touch = e.touches[0];
+    dragRef.current = { startX: touch.clientX, startY: touch.clientY, startPosX: dragPos.x, startPosY: dragPos.y };
+    setIsDragging(true);
+  }, [dragPos]);
+
+  const handleTouchMove = useCallback((e: React.TouchEvent) => {
+    if (!dragRef.current) return;
+    const touch = e.touches[0];
+    const dx = touch.clientX - dragRef.current.startX;
+    const dy = touch.clientY - dragRef.current.startY;
+    setDragPos({ x: dragRef.current.startPosX + dx, y: dragRef.current.startPosY + dy });
+  }, []);
+
+  const handleTouchEnd = useCallback(() => {
+    if (dragRef.current) {
+      const dx = Math.abs(dragPos.x - dragRef.current.startPosX);
+      const dy = Math.abs(dragPos.y - dragRef.current.startPosY);
+      if (dx < 5 && dy < 5) {
+        openJarvis();
+      }
+    }
+    setIsDragging(false);
+    dragRef.current = null;
+  }, [dragPos, openJarvis]);
 
   const closeJarvis = useCallback(() => {
     setAnimIn(false);
@@ -889,12 +920,16 @@ export function JarvisWidget() {
       {!open && (
         <button
           onClick={openJarvis}
-          className="fixed bottom-5 right-5 z-[9998] group flex items-center gap-2 px-3 py-2 rounded-full transition-all duration-300"
+          onTouchStart={handleTouchStart}
+          onTouchMove={handleTouchMove}
+          onTouchEnd={handleTouchEnd}
+          className="fixed right-5 bottom-20 md:bottom-5 z-[9998] group flex items-center gap-2 px-3 py-2 rounded-full transition-all duration-300"
           style={{
             background: "rgba(0,0,0,0.85)",
             border: "1px solid rgba(0,229,255,0.25)",
             backdropFilter: "blur(12px)",
             boxShadow: "0 0 16px rgba(0,229,255,0.08), 0 2px 8px rgba(0,0,0,0.5)",
+            transform: `translate(${dragPos.x}px, ${dragPos.y}px)`,
           }}
           title="Open JARVIS (Ctrl+J)"
         >

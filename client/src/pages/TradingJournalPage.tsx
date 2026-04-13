@@ -1,5 +1,6 @@
 import { useState, useEffect } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { TradingDisclaimerBanner, TradingDisclaimerModal } from "@/components/TradingDisclaimer";
 import {
   Plus,
   TrendingUp,
@@ -1767,6 +1768,8 @@ export default function TradingJournalPage() {
 
   return (
     <div className="p-6 max-w-5xl mx-auto">
+      <TradingDisclaimerModal />
+      <TradingDisclaimerBanner />
       {/* Header */}
       <div className="flex items-center justify-between mb-4">
         <div>

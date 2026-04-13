@@ -4,6 +4,9 @@ import { Play, Trophy, AlertTriangle, Activity, Target, Zap, Bot, Plus, Trash2, 
 import { Button } from "@/components/ui/button";
 import { apiRequest } from "@/lib/queryClient";
 import ModelSelector from "@/components/ModelSelector";
+import AIChatPanel from "@/components/AIChatPanel";
+import { TradingDisclaimerBanner, TradingDisclaimerModal } from "@/components/TradingDisclaimer";
+import SellOnMarketplace from "@/components/SellOnMarketplace";
 
 type BotChallenge = {
   id: number;
@@ -346,6 +349,11 @@ function BotBuilderTab() {
               <Button size="sm" variant="ghost" onClick={e => { e.stopPropagation(); deleteBot.mutate(bot.id); }}>
                 <Trash2 className="w-3 h-3 text-destructive" />
               </Button>
+              {bot.status === "generated" && (
+                <div onClick={e => e.stopPropagation()}>
+                  <SellOnMarketplace itemName={bot.name} itemDescription={bot.description} listingType="bot" attachedItemId={String(bot.id)} attachedItemData={{ name: bot.name, description: bot.description, strategy: bot.strategy, config: bot.config }} />
+                </div>
+              )}
             </div>
           </div>
         ))}
@@ -449,6 +457,8 @@ export default function BotChallengePage() {
 
   return (
     <div className="p-6 max-w-5xl mx-auto">
+      <TradingDisclaimerModal />
+      <TradingDisclaimerBanner />
       {/* Header */}
       <div className="flex items-center justify-between mb-4">
         <div>
@@ -596,6 +606,11 @@ export default function BotChallengePage() {
         )}
       </div>
       </>}
+      <AIChatPanel
+        systemPrompt="You are an expert trading bot strategist. Help the user design their trading bot. Ask about their strategy, risk tolerance, preferred markets, and indicators. Provide structured bot configurations."
+        placeholder="Describe your trading bot strategy..."
+        pageContext="bot-challenge"
+      />
     </div>
   );
 }

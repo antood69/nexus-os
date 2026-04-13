@@ -1442,5 +1442,262 @@ export async function registerRoutes(
     }
   });
 
+  // ── Products + Purchase ──────────────────────────────────────────────────
+  app.get("/api/products", async (req, res) => {
+    const products = await storage.getProducts();
+    res.json(products);
+  });
+
+  app.get("/api/products/:id", async (req, res) => {
+    const product = await storage.getProduct(req.params.id);
+    if (!product) return res.status(404).json({ error: "Product not found" });
+    res.json(product);
+  });
+
+  app.post("/api/products/:id/purchase", async (req, res) => {
+    const userId = req.user?.id || 1;
+    const user = await storage.getUser(userId);
+    const product = await storage.getProduct(req.params.id);
+    if (!product) return res.status(404).json({ error: "Product not found" });
+
+    // Owner gets everything free
+    if (user?.role === "owner") {
+      const existing = await storage.getUserProduct(userId, product.id);
+      if (existing) return res.json({ already_owned: true, product: existing });
+      const up = await storage.createUserProduct({ userId, productId: product.id, priceCents: 0 });
+      return res.json({ purchased: true, product: up });
+    }
+
+    const existing = await storage.getUserProduct(userId, product.id);
+    if (existing) return res.json({ already_owned: true, product: existing });
+
+    try {
+      const { stripe } = await import("./stripe");
+      const origin = req.headers.origin || `https://${req.headers.host}`;
+      const session = await stripe.checkout.sessions.create({
+        mode: "payment",
+        line_items: [{
+          price_data: {
+            currency: "usd",
+            product_data: { name: product.name, description: product.description || "" },
+            unit_amount: product.priceCents,
+          },
+          quantity: 1,
+        }],
+        success_url: `${origin}/#/workflows?purchased=${product.id}`,
+        cancel_url: `${origin}/#/marketplace`,
+        metadata: { userId: String(userId), productId: product.id, type: "product_purchase" },
+      });
+      res.json({ url: session.url });
+    } catch (err: any) {
+      res.status(500).json({ error: err.message });
+    }
+  });
+
+  app.get("/api/user-products", async (req, res) => {
+    const userId = req.user?.id || 1;
+    const products = await storage.getUserProducts(userId);
+    res.json(products);
+  });
+
+  // ── Workflow Presets ────────────────────────────────────────────────────────
+  app.get("/api/workflow-presets", async (req, res) => {
+    const presets = await storage.getWorkflowPresets(req.query.productId as string | undefined);
+    res.json(presets);
+  });
+
+  app.get("/api/workflow-presets/:id", async (req, res) => {
+    const preset = await storage.getWorkflowPreset(req.params.id);
+    if (!preset) return res.status(404).json({ error: "Preset not found" });
+    res.json(preset);
+  });
+
+  app.post("/api/workflow-presets/:id/apply", async (req, res) => {
+    const userId = req.user?.id || 1;
+    const preset = await storage.getWorkflowPreset(req.params.id);
+    if (!preset) return res.status(404).json({ error: "Preset not found" });
+
+    // Check if user owns the required product (if preset requires one)
+    if (preset.productId) {
+      const user = await storage.getUser(userId);
+      if (user?.role !== "owner") {
+        const owned = await storage.getUserProduct(userId, preset.productId);
+        if (!owned) return res.status(403).json({ error: "Product required", productId: preset.productId });
+      }
+    }
+
+    // Create a workflow from the preset template
+    const workflow = await storage.createWorkflow({
+      name: preset.name,
+      description: preset.description,
+      status: "draft",
+      priority: "medium",
+    });
+
+    // Save the canvas state from template
+    if (preset.templateData) {
+      await storage.updateWorkflow(workflow.id, { canvasState: preset.templateData } as any);
+    }
+
+    res.json(workflow);
+  });
+
+  // ── Marketplace Sell Items ──────────────────────────────────────────────────
+  app.post("/api/marketplace/sell-item", async (req, res) => {
+    const userId = req.user?.id || 1;
+    const { title, description, price, priceType, category, listingType, attachedItemId, attachedItemData } = req.body;
+    if (!title) return res.status(400).json({ error: "Title required" });
+
+    try {
+      const listing = await storage.createMarketplaceListing({
+        sellerId: userId,
+        title,
+        shortDescription: description || title,
+        fullDescription: description || "",
+        category: category || "tool",
+        price: price || 0,
+        priceType: priceType || "one_time",
+        tags: [],
+        previewImages: [],
+      });
+
+      // Update with extra columns via raw SQL
+      if (listingType || attachedItemId || attachedItemData) {
+        const updates: string[] = [];
+        const vals: any[] = [];
+        if (listingType) { updates.push("listing_type = ?"); vals.push(listingType); }
+        if (attachedItemId) { updates.push("attached_item_id = ?"); vals.push(attachedItemId); }
+        if (attachedItemData) { updates.push("attached_item_data = ?"); vals.push(typeof attachedItemData === "string" ? attachedItemData : JSON.stringify(attachedItemData)); }
+        if (updates.length) {
+          vals.push(listing.id);
+          const db = (await import("./storage")).default || (await import("./storage"));
+          // Direct SQL update for new columns
+          const Database = (await import("better-sqlite3")).default;
+          const DB_PATH = process.env.NODE_ENV === "production" ? "/data/data.db" : "data.db";
+          const sqliteDb = new Database(DB_PATH);
+          sqliteDb.prepare(`UPDATE marketplace_listings SET ${updates.join(", ")} WHERE id = ?`).run(...vals);
+          sqliteDb.close();
+        }
+      }
+
+      res.status(201).json(listing);
+    } catch (err: any) {
+      res.status(500).json({ error: err.message });
+    }
+  });
+
+  // ── Marketplace Purchase with Item Copy ─────────────────────────────────────
+  app.post("/api/marketplace/listings/:id/buy-item", async (req, res) => {
+    const userId = req.user?.id || 1;
+    const listing = await storage.getMarketplaceListing(Number(req.params.id));
+    if (!listing) return res.status(404).json({ error: "Listing not found" });
+
+    // Check for attached item data
+    const Database = (await import("better-sqlite3")).default;
+    const DB_PATH = process.env.NODE_ENV === "production" ? "/data/data.db" : "data.db";
+    const sqliteDb = new Database(DB_PATH);
+    const row = sqliteDb.prepare("SELECT listing_type, attached_item_data FROM marketplace_listings WHERE id = ?").get(Number(req.params.id)) as any;
+    sqliteDb.close();
+
+    const itemData = row?.attached_item_data ? JSON.parse(row.attached_item_data) : null;
+    const listingType = row?.listing_type || "service";
+
+    // Copy item to buyer's account
+    let copiedItem = null;
+    if (itemData) {
+      if (listingType === "workflow" || listingType === "automation") {
+        copiedItem = await storage.createWorkflow({
+          name: itemData.name || listing.title,
+          description: itemData.description || listing.shortDescription,
+          status: "draft",
+          priority: "medium",
+        });
+        if (itemData.canvasState) {
+          await storage.updateWorkflow(copiedItem.id, { canvasState: itemData.canvasState } as any);
+        }
+      }
+      // For bot or code types, just provide the data
+    }
+
+    res.json({ purchased: true, copiedItem, listingType, listing });
+  });
+
+  // ── Fiverr Webhook for External Orders ──────────────────────────────────────
+  app.post("/api/fiverr/webhook/order", async (req, res) => {
+    const { clientName, clientEmail, gigType, requirements, deadline } = req.body;
+    try {
+      const order = await storage.createFiverrOrder({
+        gigId: "webhook",
+        userId: 1,
+        buyerName: clientName || "External Client",
+        requirements: requirements || "",
+        amount: 0,
+      });
+      // Update extra columns
+      const Database = (await import("better-sqlite3")).default;
+      const DB_PATH = process.env.NODE_ENV === "production" ? "/data/data.db" : "data.db";
+      const sqliteDb = new Database(DB_PATH);
+      sqliteDb.prepare("UPDATE fiverr_orders SET client_name = ?, client_email = ?, gig_type = ?, deadline = ?, status = ? WHERE id = ?").run(
+        clientName || null, clientEmail || null, gigType || null, deadline || null, "intake", order.id
+      );
+      sqliteDb.close();
+      res.json({ orderId: order.id });
+    } catch (err: any) {
+      res.status(500).json({ error: err.message });
+    }
+  });
+
+  // ── Fiverr Pipeline Stage Update ────────────────────────────────────────────
+  app.post("/api/fiverr-orders/:id/advance", async (req, res) => {
+    const { stage, revisionNotes } = req.body;
+    const order = await storage.getFiverrOrder(req.params.id);
+    if (!order) return res.status(404).json({ error: "Order not found" });
+
+    const update: any = { status: stage };
+    const updated = await storage.updateFiverrOrder(req.params.id, update);
+
+    // If moving to generation stage, trigger AI generation
+    if (stage === "generation") {
+      try {
+        const { runAgentChat } = await import("./ai");
+        const systemPrompt = "You are an expert content creator. Generate the deliverable based on the client requirements. Be professional and thorough.";
+        const userMessage = `Client requirements: ${order.requirements || "Not specified"}. ${revisionNotes ? `Revision notes: ${revisionNotes}` : ""}`;
+        const reply = await runAgentChat("claude-sonnet", systemPrompt, [], userMessage);
+
+        // Save AI output
+        const Database = (await import("better-sqlite3")).default;
+        const DB_PATH = process.env.NODE_ENV === "production" ? "/data/data.db" : "data.db";
+        const sqliteDb = new Database(DB_PATH);
+        sqliteDb.prepare("UPDATE fiverr_orders SET ai_output = ?, status = ? WHERE id = ?").run(reply, "quality_check", req.params.id);
+        sqliteDb.close();
+
+        return res.json({ ...updated, aiOutput: reply, status: "quality_check" });
+      } catch (err: any) {
+        return res.json({ ...updated, error: "AI generation failed: " + err.message });
+      }
+    }
+
+    res.json(updated);
+  });
+
+  // ── Fiverr Revenue Stats ────────────────────────────────────────────────────
+  app.get("/api/fiverr/stats", async (req, res) => {
+    const userId = req.user?.id || 1;
+    const orders = await storage.getFiverrOrders(userId);
+    const completed = orders.filter(o => o.status === "completed" || o.status === "delivered");
+    const totalRevenue = completed.reduce((sum, o) => sum + (o.amount || 0), 0);
+    const avgOrderValue = completed.length ? totalRevenue / completed.length : 0;
+    const byStatus: Record<string, number> = {};
+    orders.forEach(o => { byStatus[o.status] = (byStatus[o.status] || 0) + 1; });
+
+    res.json({
+      totalRevenue,
+      avgOrderValue,
+      totalOrders: orders.length,
+      completedOrders: completed.length,
+      byStatus,
+    });
+  });
+
   return httpServer;
 }

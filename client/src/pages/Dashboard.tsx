@@ -138,7 +138,7 @@ export default function Dashboard() {
           </div>
           <div className="flex items-center gap-2 flex-wrap">
             <QuickAction href="/boss" icon={Bot} label="New Chat" color="indigo" />
-            <QuickAction href="/bots" icon={Cpu} label="Create Bot" color="violet" />
+            <QuickAction href="/bot-challenge" icon={Cpu} label="Create Bot" color="violet" />
             <QuickAction href="/app-generator" icon={Globe} label="Generate App" color="emerald" />
             <QuickAction href="/fiverr" icon={Briefcase} label="New Gig" color="sky" />
           </div>

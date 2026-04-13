@@ -10,6 +10,8 @@ import JSZip from "jszip";
 import { Button } from "@/components/ui/button";
 import { apiRequest } from "@/lib/queryClient";
 import ModelSelector from "@/components/ModelSelector";
+import AIChatPanel from "@/components/AIChatPanel";
+import SellOnMarketplace from "@/components/SellOnMarketplace";
 
 type GeneratedApp = {
   id: string;
@@ -52,13 +54,49 @@ const FRAMEWORKS = [
   { value: "express", label: "Node Express", ext: "js" },
 ];
 
-const TEMPLATES = [
-  { name: "SaaS Dashboard", desc: "Analytics dashboard with charts, user management, settings", type: "dashboard", framework: "react" },
-  { name: "Landing Page", desc: "Modern marketing page with hero, features, pricing, CTA", type: "landing", framework: "html" },
-  { name: "E-commerce Store", desc: "Product catalog, cart, checkout flow", type: "ecommerce", framework: "nextjs" },
-  { name: "Blog Platform", desc: "Markdown blog with categories, search, RSS", type: "web", framework: "nextjs" },
-  { name: "REST API", desc: "CRUD API with auth, validation, rate limiting", type: "api", framework: "express" },
-  { name: "Mobile App", desc: "Cross-platform app with navigation, auth, data sync", type: "mobile", framework: "react" },
+const TEMPLATES: { name: string; desc: string; type: string; framework: string; icon: string; files?: Record<string, string> }[] = [
+  { name: "Landing Page", desc: "Modern landing page with hero, features, pricing", type: "landing", framework: "html", icon: "Layout",
+    files: {
+      "index.html": `<!DOCTYPE html>\n<html lang="en">\n<head>\n  <meta charset="UTF-8">\n  <meta name="viewport" content="width=device-width, initial-scale=1.0">\n  <title>My Landing Page</title>\n  <link rel="stylesheet" href="style.css">\n</head>\n<body>\n  <header class="hero">\n    <nav><a href="#" class="logo">Brand</a><a href="#features">Features</a><a href="#pricing">Pricing</a><a href="#" class="btn">Get Started</a></nav>\n    <h1>Build Something Amazing</h1>\n    <p>The fastest way to launch your next project</p>\n    <a href="#" class="btn btn-lg">Start Free Trial</a>\n  </header>\n  <section id="features" class="features">\n    <h2>Features</h2>\n    <div class="grid">\n      <div class="card"><h3>Fast</h3><p>Blazing fast performance</p></div>\n      <div class="card"><h3>Secure</h3><p>Enterprise-grade security</p></div>\n      <div class="card"><h3>Scalable</h3><p>Grows with your business</p></div>\n    </div>\n  </section>\n  <section id="pricing" class="pricing">\n    <h2>Pricing</h2>\n    <div class="grid">\n      <div class="card"><h3>Free</h3><p class="price">$0/mo</p><ul><li>1 Project</li><li>Basic Support</li></ul></div>\n      <div class="card featured"><h3>Pro</h3><p class="price">$29/mo</p><ul><li>Unlimited Projects</li><li>Priority Support</li></ul></div>\n    </div>\n  </section>\n  <script src="app.js"></script>\n</body>\n</html>`,
+      "style.css": `* { margin: 0; padding: 0; box-sizing: border-box; }\nbody { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; color: #1a1a1a; }\n.hero { background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; padding: 2rem; text-align: center; min-height: 80vh; display: flex; flex-direction: column; justify-content: center; }\nnav { display: flex; gap: 1.5rem; justify-content: center; margin-bottom: 3rem; }\nnav a { color: rgba(255,255,255,0.9); text-decoration: none; }\n.logo { font-weight: bold; font-size: 1.25rem; }\n.btn { background: white; color: #667eea; padding: 0.75rem 2rem; border-radius: 8px; font-weight: 600; }\n.btn-lg { font-size: 1.1rem; margin-top: 2rem; display: inline-block; }\nh1 { font-size: 3rem; margin-bottom: 1rem; }\n.features, .pricing { padding: 4rem 2rem; text-align: center; }\n.grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); gap: 1.5rem; max-width: 900px; margin: 2rem auto; }\n.card { background: white; border: 1px solid #eee; border-radius: 12px; padding: 2rem; }\n.featured { border-color: #667eea; box-shadow: 0 4px 24px rgba(102,126,234,0.15); }\n.price { font-size: 2rem; font-weight: bold; margin: 1rem 0; }`,
+      "app.js": `// Smooth scroll\ndocument.querySelectorAll('a[href^="#"]').forEach(a => {\n  a.addEventListener('click', e => {\n    e.preventDefault();\n    const target = document.querySelector(a.getAttribute('href'));\n    if (target) target.scrollIntoView({ behavior: 'smooth' });\n  });\n});`
+    }
+  },
+  { name: "SaaS Dashboard", desc: "Admin dashboard with charts and data tables", type: "dashboard", framework: "react", icon: "BarChart3",
+    files: {
+      "index.html": `<!DOCTYPE html>\n<html><head><title>Dashboard</title><link rel="stylesheet" href="style.css"></head>\n<body>\n<div id="app">\n  <aside class="sidebar"><h2>Dashboard</h2><nav><a href="#" class="active">Overview</a><a href="#">Analytics</a><a href="#">Users</a><a href="#">Settings</a></nav></aside>\n  <main class="content">\n    <header><h1>Overview</h1><span class="date">April 2026</span></header>\n    <div class="stats">\n      <div class="stat-card"><span class="label">Revenue</span><span class="value">$24,500</span></div>\n      <div class="stat-card"><span class="label">Users</span><span class="value">1,245</span></div>\n      <div class="stat-card"><span class="label">Orders</span><span class="value">356</span></div>\n      <div class="stat-card"><span class="label">Growth</span><span class="value">+12.5%</span></div>\n    </div>\n    <section class="chart-area"><div class="chart-placeholder">Chart Area</div></section>\n  </main>\n</div>\n<script src="app.js"></script>\n</body></html>`,
+      "style.css": `* { margin: 0; padding: 0; box-sizing: border-box; }\nbody { font-family: -apple-system, sans-serif; background: #0f1117; color: #e0e0e0; }\n#app { display: flex; min-height: 100vh; }\n.sidebar { width: 240px; background: #1a1d2e; padding: 1.5rem; }\n.sidebar h2 { color: #6366f1; margin-bottom: 2rem; }\n.sidebar nav a { display: block; padding: 0.75rem 1rem; color: #888; text-decoration: none; border-radius: 8px; margin-bottom: 0.25rem; }\n.sidebar nav a.active { background: #6366f1; color: white; }\n.content { flex: 1; padding: 2rem; }\nheader { display: flex; justify-content: space-between; align-items: center; margin-bottom: 2rem; }\n.date { color: #888; }\n.stats { display: grid; grid-template-columns: repeat(4, 1fr); gap: 1rem; margin-bottom: 2rem; }\n.stat-card { background: #1a1d2e; padding: 1.5rem; border-radius: 12px; }\n.label { font-size: 0.85rem; color: #888; }\n.value { display: block; font-size: 1.75rem; font-weight: bold; margin-top: 0.5rem; }\n.chart-area { background: #1a1d2e; border-radius: 12px; padding: 2rem; min-height: 300px; }\n.chart-placeholder { text-align: center; color: #555; padding: 5rem; }`,
+      "app.js": `console.log('Dashboard loaded');\n// Add chart logic here`
+    }
+  },
+  { name: "E-commerce", desc: "Product listing with cart and checkout", type: "ecommerce", framework: "html", icon: "ShoppingBag",
+    files: {
+      "index.html": `<!DOCTYPE html>\n<html><head><title>Shop</title><link rel="stylesheet" href="style.css"></head>\n<body>\n<header><h1>Shop</h1><button id="cart-btn">Cart (<span id="count">0</span>)</button></header>\n<main class="products" id="products"></main>\n<script src="app.js"></script>\n</body></html>`,
+      "style.css": `* { margin: 0; padding: 0; box-sizing: border-box; }\nbody { font-family: -apple-system, sans-serif; background: #fafafa; }\nheader { display: flex; justify-content: space-between; align-items: center; padding: 1rem 2rem; background: white; box-shadow: 0 1px 3px rgba(0,0,0,0.1); }\n.products { display: grid; grid-template-columns: repeat(auto-fill, minmax(250px, 1fr)); gap: 1.5rem; padding: 2rem; max-width: 1200px; margin: 0 auto; }\n.product { background: white; border-radius: 12px; overflow: hidden; box-shadow: 0 1px 3px rgba(0,0,0,0.1); }\n.product img { width: 100%; height: 200px; object-fit: cover; background: #eee; }\n.product-info { padding: 1rem; }\n.product h3 { margin-bottom: 0.5rem; }\n.product .price { font-weight: bold; color: #16a34a; font-size: 1.2rem; }\n.product button { width: 100%; margin-top: 0.75rem; padding: 0.5rem; background: #2563eb; color: white; border: none; border-radius: 6px; cursor: pointer; }`,
+      "app.js": `const products = [\n  { id: 1, name: 'Wireless Headphones', price: 79.99, img: '' },\n  { id: 2, name: 'Smart Watch', price: 199.99, img: '' },\n  { id: 3, name: 'Laptop Stand', price: 49.99, img: '' },\n  { id: 4, name: 'USB-C Hub', price: 39.99, img: '' },\n];\nlet cart = [];\nconst el = document.getElementById('products');\nproducts.forEach(p => {\n  el.innerHTML += \`<div class="product"><div style="height:200px;background:#e5e7eb"></div><div class="product-info"><h3>\${p.name}</h3><span class="price">$\${p.price}</span><button onclick="addToCart(\${p.id})">Add to Cart</button></div></div>\`;\n});\nfunction addToCart(id) {\n  cart.push(id);\n  document.getElementById('count').textContent = cart.length;\n}`
+    }
+  },
+  { name: "Portfolio", desc: "Personal portfolio with projects showcase", type: "web", framework: "html", icon: "User",
+    files: {
+      "index.html": `<!DOCTYPE html>\n<html><head><title>Portfolio</title><link rel="stylesheet" href="style.css"></head>\n<body>\n<header><h1>Jane Doe</h1><p>Full-Stack Developer</p></header>\n<section class="projects"><h2>Projects</h2>\n<div class="grid">\n  <div class="card"><h3>Project Alpha</h3><p>A web application built with React</p></div>\n  <div class="card"><h3>Project Beta</h3><p>Mobile app with React Native</p></div>\n  <div class="card"><h3>Project Gamma</h3><p>API service with Node.js</p></div>\n</div>\n</section>\n<section class="contact"><h2>Contact</h2><p>hello@janedoe.dev</p></section>\n<script src="app.js"></script>\n</body></html>`,
+      "style.css": `* { margin: 0; padding: 0; box-sizing: border-box; }\nbody { font-family: -apple-system, sans-serif; background: #0f0f0f; color: #e0e0e0; }\nheader { text-align: center; padding: 6rem 2rem; background: linear-gradient(135deg, #1e293b, #0f172a); }\nheader h1 { font-size: 3rem; }\nheader p { color: #94a3b8; margin-top: 0.5rem; font-size: 1.2rem; }\n.projects, .contact { max-width: 900px; margin: 0 auto; padding: 4rem 2rem; }\nh2 { margin-bottom: 2rem; }\n.grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); gap: 1.5rem; }\n.card { background: #1a1a2e; padding: 2rem; border-radius: 12px; border: 1px solid #2a2a3e; }\n.card h3 { margin-bottom: 0.5rem; }\n.contact { text-align: center; }`,
+      "app.js": `console.log('Portfolio loaded');`
+    }
+  },
+  { name: "Blog", desc: "Blog with posts, categories, and comments", type: "web", framework: "html", icon: "PenTool",
+    files: {
+      "index.html": `<!DOCTYPE html>\n<html><head><title>Blog</title><link rel="stylesheet" href="style.css"></head>\n<body>\n<header><h1>My Blog</h1><nav><a href="#">Home</a><a href="#">Categories</a><a href="#">About</a></nav></header>\n<main class="posts">\n  <article><h2>Getting Started with Web Development</h2><span class="meta">April 10, 2026 &middot; 5 min read</span><p>Learn the fundamentals of building for the web...</p><a href="#">Read more &rarr;</a></article>\n  <article><h2>Understanding CSS Grid</h2><span class="meta">April 8, 2026 &middot; 3 min read</span><p>A deep dive into CSS Grid layout...</p><a href="#">Read more &rarr;</a></article>\n</main>\n<script src="app.js"></script>\n</body></html>`,
+      "style.css": `* { margin: 0; padding: 0; box-sizing: border-box; }\nbody { font-family: Georgia, serif; background: #fefefe; color: #333; max-width: 700px; margin: 0 auto; padding: 2rem; }\nheader { border-bottom: 1px solid #eee; padding-bottom: 1rem; margin-bottom: 2rem; display: flex; justify-content: space-between; align-items: center; }\nnav a { margin-left: 1rem; color: #666; text-decoration: none; }\narticle { margin-bottom: 3rem; }\narticle h2 { margin-bottom: 0.5rem; }\n.meta { color: #999; font-size: 0.85rem; }\narticle p { margin: 1rem 0; line-height: 1.7; color: #555; }\narticle a { color: #2563eb; text-decoration: none; }`,
+      "app.js": `console.log('Blog loaded');`
+    }
+  },
+  { name: "SaaS App", desc: "SaaS application with auth, billing, dashboard", type: "web", framework: "react", icon: "Layers",
+    files: {
+      "index.html": `<!DOCTYPE html>\n<html><head><title>SaaS App</title><link rel="stylesheet" href="style.css"></head>\n<body>\n<div id="app">\n  <div class="auth-card">\n    <h1>Welcome Back</h1>\n    <form id="login-form">\n      <input type="email" placeholder="Email" required />\n      <input type="password" placeholder="Password" required />\n      <button type="submit">Sign In</button>\n    </form>\n    <p class="switch">Don't have an account? <a href="#">Sign up</a></p>\n  </div>\n</div>\n<script src="app.js"></script>\n</body></html>`,
+      "style.css": `* { margin: 0; padding: 0; box-sizing: border-box; }\nbody { font-family: -apple-system, sans-serif; background: #0f1117; color: #e0e0e0; display: flex; min-height: 100vh; align-items: center; justify-content: center; }\n.auth-card { background: #1a1d2e; padding: 2.5rem; border-radius: 16px; width: 100%; max-width: 400px; }\n.auth-card h1 { text-align: center; margin-bottom: 2rem; }\nform { display: flex; flex-direction: column; gap: 1rem; }\ninput { padding: 0.75rem 1rem; background: #0f1117; border: 1px solid #2a2d3e; border-radius: 8px; color: white; font-size: 0.95rem; }\nbutton { padding: 0.75rem; background: #6366f1; border: none; color: white; border-radius: 8px; font-weight: 600; cursor: pointer; font-size: 1rem; }\n.switch { text-align: center; margin-top: 1.5rem; color: #888; font-size: 0.85rem; }\n.switch a { color: #6366f1; text-decoration: none; }`,
+      "app.js": `document.getElementById('login-form').addEventListener('submit', e => {\n  e.preventDefault();\n  alert('Login functionality coming soon!');\n});`
+    }
+  },
 ];
 
 // ── Parse generated code into file tree ──────────────────────────────────────
@@ -378,7 +416,24 @@ export default function AppGeneratorPage() {
             {TEMPLATES.map(t => (
               <button
                 key={t.name}
-                onClick={() => { setForm({ name: t.name, description: t.desc, appType: t.type, framework: t.framework }); setShowCreate(true); }}
+                onClick={() => {
+                  if (t.files) {
+                    // Load template files directly into IDE
+                    const tree: FileNode[] = Object.entries(t.files).map(([name, content]) => ({
+                      name, type: "file" as const, content, language: getLanguage(name.split(".").pop() || "")
+                    }));
+                    setFileTree(tree);
+                    setSelectedFile(tree[0]?.name || "");
+                    setFileContent(tree[0]?.content || "");
+                    setActiveApp({ id: `template-${Date.now()}`, name: t.name, description: t.desc, appType: t.type, framework: t.framework, generatedCode: Object.entries(t.files).map(([n, c]) => `// === ${n} ===\n${c}`).join("\n\n"), previewUrl: null, status: "generated", createdAt: new Date().toISOString() });
+                    setView("ide");
+                    setChatMessages([{ role: "assistant", content: `Template "${t.name}" loaded. You can edit the files or ask me to modify them.` }]);
+                    setTerminalLines(prev => [...prev, `$ loaded template: ${t.name}`, `✅ ${Object.keys(t.files!).length} files ready`]);
+                  } else {
+                    setForm({ name: t.name, description: t.desc, appType: t.type, framework: t.framework });
+                    setShowCreate(true);
+                  }
+                }}
                 className="text-left bg-card border border-border rounded-lg p-4 hover:border-primary/40 transition-colors group"
               >
                 <div className="flex items-center gap-2 mb-1.5">
@@ -528,6 +583,15 @@ export default function AppGeneratorPage() {
           <button onClick={downloadAll} className="p-1.5 rounded hover:bg-[#313244] text-[#a6adc8]" title="Download ZIP">
             <Download className="w-3.5 h-3.5" />
           </button>
+          {activeApp && (
+            <SellOnMarketplace
+              itemName={activeApp.name}
+              itemDescription={activeApp.description || ""}
+              listingType="code"
+              attachedItemId={activeApp.id}
+              attachedItemData={{ name: activeApp.name, description: activeApp.description, generatedCode: activeApp.generatedCode, framework: activeApp.framework }}
+            />
+          )}
           <button onClick={() => setShowTerminal(!showTerminal)} className={`p-1.5 rounded hover:bg-[#313244] ${showTerminal ? "text-[#89b4fa]" : "text-[#a6adc8]"}`} title="Terminal">
             <PanelBottom className="w-3.5 h-3.5" />
           </button>
@@ -665,6 +729,11 @@ export default function AppGeneratorPage() {
           </div>
         )}
       </div>
+      <AIChatPanel
+        systemPrompt="You are an expert app architect. Help the user design their app. Ask clarifying questions about features, tech stack, and user experience. When ready, provide a structured spec with app name, description, and feature list that can be used to generate the app."
+        placeholder="Describe what you want to build..."
+        pageContext="app-generator"
+      />
     </div>
   );
 }

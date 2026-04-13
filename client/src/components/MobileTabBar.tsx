@@ -57,8 +57,8 @@ export default function MobileTabBar() {
     <>
       {/* Bottom tab bar */}
       <div
-        className="fixed bottom-0 left-0 right-0 h-16 bg-card border-t border-border z-50 flex items-center"
-        style={{ paddingBottom: "env(safe-area-inset-bottom)" }}
+        className="fixed bottom-0 left-0 right-0 bg-card border-t border-border z-50 flex items-center"
+        style={{ paddingBottom: "env(safe-area-inset-bottom, 0px)", height: "calc(64px + env(safe-area-inset-bottom, 0px))" }}
       >
         {/* Primary tabs */}
         {primaryTabs.map((tab) => {
