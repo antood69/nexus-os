@@ -310,6 +310,21 @@ sqlite.exec(`
     created_at TEXT DEFAULT (datetime('now')),
     updated_at TEXT DEFAULT (datetime('now'))
   );
+
+  CREATE TABLE IF NOT EXISTS user_preferences (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    user_id INTEGER NOT NULL UNIQUE,
+    wallpaper_url TEXT,
+    wallpaper_type TEXT DEFAULT 'none',
+    wallpaper_tint REAL DEFAULT 0.4,
+    accent_color TEXT DEFAULT '#6366f1',
+    glass_blur INTEGER DEFAULT 12,
+    glass_opacity REAL DEFAULT 0.08,
+    sidebar_position TEXT DEFAULT 'left',
+    compact_mode INTEGER DEFAULT 0,
+    created_at TEXT DEFAULT (datetime('now')),
+    updated_at TEXT DEFAULT (datetime('now'))
+  );
 `);
 
 // Safe ALTER TABLE for existing DBs that lack new columns
@@ -355,6 +370,21 @@ export interface CustomTool {
   isActive: number;
   usageCount: number;
   lastUsedAt: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface UserPreferences {
+  id: number;
+  userId: number;
+  wallpaperUrl: string | null;
+  wallpaperType: string;
+  wallpaperTint: number;
+  accentColor: string;
+  glassBlur: number;
+  glassOpacity: number;
+  sidebarPosition: string;
+  compactMode: number;
   createdAt: string;
   updatedAt: string;
 }
@@ -481,6 +511,9 @@ export interface IStorage {
   updateTool(id: string, data: Partial<CustomTool>): Promise<CustomTool | undefined>;
   deleteTool(id: string): Promise<void>;
   incrementToolUsage(id: string): Promise<void>;
+  // User Preferences
+  getUserPreferences(userId: number): Promise<UserPreferences>;
+  updateUserPreferences(userId: number, data: Partial<UserPreferences>): Promise<UserPreferences>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -1089,6 +1122,86 @@ export class DatabaseStorage implements IStorage {
   async incrementToolUsage(id: string): Promise<void> {
     const now = new Date().toISOString();
     sqlite.prepare('UPDATE custom_tools SET usage_count = usage_count + 1, last_used_at = ?, updated_at = ? WHERE id = ?').run(now, now, id);
+  }
+
+  // ── User Preferences ──────────────────────────────────────────────────────
+  private readonly defaultPrefs = {
+    wallpaperUrl: null,
+    wallpaperType: 'none',
+    wallpaperTint: 0.4,
+    accentColor: '#6366f1',
+    glassBlur: 12,
+    glassOpacity: 0.08,
+    sidebarPosition: 'left',
+    compactMode: 0,
+  };
+
+  async getUserPreferences(userId: number): Promise<UserPreferences> {
+    const row = sqlite.prepare('SELECT * FROM user_preferences WHERE user_id = ?').get(userId) as any;
+    if (!row) {
+      // Return defaults (no row yet)
+      return {
+        id: 0,
+        userId,
+        ...this.defaultPrefs,
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
+      };
+    }
+    return {
+      id: row.id,
+      userId: row.user_id,
+      wallpaperUrl: row.wallpaper_url,
+      wallpaperType: row.wallpaper_type,
+      wallpaperTint: row.wallpaper_tint,
+      accentColor: row.accent_color,
+      glassBlur: row.glass_blur,
+      glassOpacity: row.glass_opacity,
+      sidebarPosition: row.sidebar_position,
+      compactMode: row.compact_mode,
+      createdAt: row.created_at,
+      updatedAt: row.updated_at,
+    };
+  }
+
+  async updateUserPreferences(userId: number, data: Partial<UserPreferences>): Promise<UserPreferences> {
+    const now = new Date().toISOString();
+    const existing = sqlite.prepare('SELECT id FROM user_preferences WHERE user_id = ?').get(userId);
+    if (!existing) {
+      sqlite.prepare(`
+        INSERT INTO user_preferences (user_id, wallpaper_url, wallpaper_type, wallpaper_tint, accent_color, glass_blur, glass_opacity, sidebar_position, compact_mode, updated_at)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      `).run(
+        userId,
+        data.wallpaperUrl ?? null,
+        data.wallpaperType ?? 'none',
+        data.wallpaperTint ?? 0.4,
+        data.accentColor ?? '#6366f1',
+        data.glassBlur ?? 12,
+        data.glassOpacity ?? 0.08,
+        data.sidebarPosition ?? 'left',
+        data.compactMode ?? 0,
+        now
+      );
+    } else {
+      const fields: string[] = [];
+      const values: any[] = [];
+      if (data.wallpaperUrl !== undefined) { fields.push('wallpaper_url = ?'); values.push(data.wallpaperUrl); }
+      if (data.wallpaperType !== undefined) { fields.push('wallpaper_type = ?'); values.push(data.wallpaperType); }
+      if (data.wallpaperTint !== undefined) { fields.push('wallpaper_tint = ?'); values.push(data.wallpaperTint); }
+      if (data.accentColor !== undefined) { fields.push('accent_color = ?'); values.push(data.accentColor); }
+      if (data.glassBlur !== undefined) { fields.push('glass_blur = ?'); values.push(data.glassBlur); }
+      if (data.glassOpacity !== undefined) { fields.push('glass_opacity = ?'); values.push(data.glassOpacity); }
+      if (data.sidebarPosition !== undefined) { fields.push('sidebar_position = ?'); values.push(data.sidebarPosition); }
+      if (data.compactMode !== undefined) { fields.push('compact_mode = ?'); values.push(data.compactMode); }
+      if (fields.length > 0) {
+        fields.push('updated_at = ?');
+        values.push(now);
+        values.push(userId);
+        sqlite.prepare(`UPDATE user_preferences SET ${fields.join(', ')} WHERE user_id = ?`).run(...values);
+      }
+    }
+    return this.getUserPreferences(userId);
   }
 }
 

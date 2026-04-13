@@ -15,10 +15,13 @@ import {
   Store,
   MessageSquare,
   Wrench,
+  Palette,
 } from "lucide-react";
 import TokenCounter from "./TokenCounter";
 import NotificationBell from "./NotificationBell";
+import WallpaperLayer from "./WallpaperLayer";
 import { useAuth } from "@/hooks/useAuth";
+import { useTheme } from "@/contexts/ThemeContext";
 import { useEffect } from "react";
 
 const navItems = [
@@ -33,6 +36,7 @@ const navItems = [
   { href: "/bot-challenge", label: "Bot Challenge", icon: Target },
   { href: "/pricing", label: "Pricing", icon: CreditCard },
   { href: "/usage", label: "Usage", icon: Coins },
+  { href: "/customize", label: "Customize", icon: Palette },
   { href: "/settings", label: "Settings", icon: Settings },
 ];
 
@@ -57,6 +61,8 @@ function UserAvatar({ name, email }: { name?: string; email?: string }) {
 export default function AppLayout({ children }: { children: React.ReactNode }) {
   const [location] = useLocation();
   const { user, isLoading, isAuthenticated, isOwner, logout } = useAuth();
+  const { wallpaperUrl, wallpaperType } = useTheme();
+  const hasWallpaper = !!(wallpaperUrl && wallpaperType !== "none");
 
   // Redirect to login if not authenticated
   useEffect(() => {
@@ -82,9 +88,18 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
   const displayLabel = user?.displayName ?? user?.email ?? "User";
 
   return (
-    <div className="flex h-screen overflow-hidden bg-background">
+    <div className="flex h-screen overflow-hidden bg-background relative">
+      {/* Wallpaper background layer */}
+      <WallpaperLayer />
+
       {/* Sidebar */}
-      <aside className="w-56 flex-shrink-0 border-r border-border bg-sidebar flex flex-col">
+      <aside
+        className={`w-56 flex-shrink-0 border-r border-border flex flex-col relative z-10 ${
+          hasWallpaper
+            ? "bg-sidebar/80 backdrop-blur-xl"
+            : "bg-sidebar"
+        }`}
+      >
         {/* Logo */}
         <div className="flex items-center gap-2.5 px-4 h-14 border-b border-border">
           <BunzLogo />
@@ -180,9 +195,15 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
       </aside>
 
       {/* Main content */}
-      <div className="flex-1 flex flex-col overflow-hidden">
+      <div className="flex-1 flex flex-col overflow-hidden relative z-10">
         {/* Top bar with notification bell */}
-        <div className="h-12 border-b border-border bg-card flex items-center justify-end px-4 gap-3 shrink-0">
+        <div
+          className={`h-12 border-b border-border flex items-center justify-end px-4 gap-3 shrink-0 ${
+            hasWallpaper
+              ? "bg-card/80 backdrop-blur-xl"
+              : "bg-card"
+          }`}
+        >
           <NotificationBell />
           <div className="w-7 h-7 rounded-full bg-primary/20 flex items-center justify-center text-xs font-semibold text-primary">
             {(user?.displayName || user?.email || "U").charAt(0).toUpperCase()}

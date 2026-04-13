@@ -23,6 +23,7 @@ import MarketplaceDetailPage from "@/pages/MarketplaceDetailPage";
 import MyListingsPage from "@/pages/MyListingsPage";
 import ToolsPage from "@/pages/ToolsPage";
 import BossPage from "@/pages/BossPage";
+import CustomizationPage from "@/pages/CustomizationPage";
 import AppLayout from "@/components/AppLayout";
 import JarvisWidget from "@/components/JarvisWidget";
 import { ThemeProvider } from "./contexts/ThemeContext";
@@ -54,6 +55,7 @@ function AppRouter() {
             <Route path="/marketplace/my" component={MyListingsPage} />
             <Route path="/marketplace/:id" component={MarketplaceDetailPage} />
             <Route path="/tools" component={ToolsPage} />
+            <Route path="/customize" component={CustomizationPage} />
             <Route component={NotFound} />
           </Switch>
         </AppLayout>

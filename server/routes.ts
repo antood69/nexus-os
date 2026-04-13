@@ -613,6 +613,19 @@ export async function registerRoutes(
     res.json({ ok: true });
   });
 
+  // ── User Preferences / Customization ────────────────────────────────────
+  app.get("/api/preferences", async (req, res) => {
+    const userId = req.user?.id || 1;
+    const prefs = await storage.getUserPreferences(userId);
+    res.json(prefs);
+  });
+
+  app.put("/api/preferences", async (req, res) => {
+    const userId = req.user?.id || 1;
+    const prefs = await storage.updateUserPreferences(userId, req.body);
+    res.json(prefs);
+  });
+
   // === STRIPE ===
   registerStripeRoutes(app);
 
