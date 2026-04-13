@@ -40,6 +40,8 @@ function AppRouter() {
     <Switch>
       {/* Public routes — no AppLayout */}
       <Route path="/login" component={LoginPage} />
+      <Route path="/marketplace" component={() => <AppLayout allowPublic><ErrorBoundary><MarketplacePage /></ErrorBoundary></AppLayout>} />
+      <Route path="/marketplace/:id" component={() => <AppLayout allowPublic><ErrorBoundary><MarketplaceDetailPage /></ErrorBoundary></AppLayout>} />
 
       {/* Protected routes — wrapped in AppLayout */}
       <Route>

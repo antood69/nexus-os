@@ -72,22 +72,22 @@ function UserAvatar({ name, email }: { name?: string; email?: string }) {
   );
 }
 
-export default function AppLayout({ children }: { children: React.ReactNode }) {
+export default function AppLayout({ children, allowPublic = false }: { children: React.ReactNode; allowPublic?: boolean }) {
   const [location] = useLocation();
   const { user, isLoading, isAuthenticated, isOwner, logout } = useAuth();
   const { wallpaperUrl, wallpaperType } = useTheme();
   const hasWallpaper = !!(wallpaperUrl && wallpaperType !== "none");
   const isMobile = useIsMobile();
 
-  // Redirect to login if not authenticated
+  // Redirect to login if not authenticated (skip for public pages)
   useEffect(() => {
-    if (!isLoading && !isAuthenticated) {
+    if (!allowPublic && !isLoading && !isAuthenticated) {
       window.location.href = "/#/login";
     }
-  }, [isLoading, isAuthenticated]);
+  }, [isLoading, isAuthenticated, allowPublic]);
 
-  // While loading auth, show nothing to prevent flash
-  if (isLoading) {
+  // While loading auth, show nothing to prevent flash (but allow public pages through)
+  if (isLoading && !allowPublic) {
     return (
       <div className="flex h-screen items-center justify-center bg-background">
         <div className="w-6 h-6 border-2 border-primary border-t-transparent rounded-full animate-spin" />
@@ -95,8 +95,8 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
     );
   }
 
-  // If not authenticated, render nothing (redirect is in progress)
-  if (!isAuthenticated) {
+  // If not authenticated and not public, render nothing (redirect is in progress)
+  if (!isAuthenticated && !allowPublic) {
     return null;
   }
 
