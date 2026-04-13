@@ -49,8 +49,8 @@ const C = {
 const STATES: Record<OrbState, StateConfig> = {
   idle: {
     coreColor: C.cyanBrite, particleColor: C.cyan, glowColor: C.cyanDeep,
-    coreIntensity: 0.95, particleAlpha: 1.0, orbitalSpeed: 0.04, turbulence: 0.012,
-    pulseRate: 0.45, pulseDepth: 0.18, trailStrength: 0.0, arcFrequency: 0.0,
+    coreIntensity: 0.95, particleAlpha: 1.0, orbitalSpeed: 0.18, turbulence: 0.025,
+    pulseRate: 0.45, pulseDepth: 0.22, trailStrength: 0.0, arcFrequency: 0.0,
     breathBlend: 0.70, scaleTarget: 1.0, dustAlpha: 0.30, ringAlpha: 0.20,
   },
   listening: {
@@ -244,16 +244,18 @@ const FRAG_GLOW = /* glsl */`
 
   void main() {
     float d = length(vUv - vec2(0.5)) * 2.0;
+    // Hard-kill pixels near quad edge to eliminate smoky box artifact
+    if (d > 0.92) discard;
+    float edgeFade = smoothstep(0.92, 0.55, d);
     float p = 1.0 + uPulse * 0.25;
-    // Scale all layers by uIntensity so error state (0.25) is properly dim
     float L0 = exp(-d * d * 28.0) * 1.8  * uIntensity;
     float L1 = exp(-d * d * 8.0)  * 0.72 * p * uIntensity;
     float L2 = exp(-d * d * 2.5)  * 0.30 * p * uIntensity;
     float L3 = exp(-d * d * 0.6)  * 0.10 * uIntensity;
     float L4 = exp(-d * d * 0.18) * 0.035 * uIntensity;
     vec3 col = vec3(1.0) * L0 + uCore * L1 + uMid * L2 + uOuter * L3 + uOuter * L4;
-    float alpha = L0 + L1 + L2 + L3 + L4;
-    gl_FragColor = vec4(col, alpha);
+    float alpha = (L0 + L1 + L2 + L3 + L4) * edgeFade;
+    gl_FragColor = vec4(col * edgeFade, alpha);
   }
 `;
 
