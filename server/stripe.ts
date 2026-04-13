@@ -3,10 +3,10 @@ import type { Express, Request, Response } from "express";
 import { storage } from "./storage";
 
 if (!process.env.STRIPE_SECRET_KEY) {
-  throw new Error("STRIPE_SECRET_KEY is not set");
+  console.warn("[stripe] STRIPE_SECRET_KEY is not set — Stripe features will be disabled");
 }
 
-export const stripe = new Stripe(process.env.STRIPE_SECRET_KEY, {
+export const stripe = new Stripe(process.env.STRIPE_SECRET_KEY || "sk_test_placeholder", {
   apiVersion: "2025-03-31.basil",
 });
 
