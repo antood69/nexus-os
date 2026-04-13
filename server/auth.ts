@@ -36,7 +36,15 @@ async function createUserSession(userId: number): Promise<string> {
 // ── Auth Middleware ───────────────────────────────────────────────────────────
 export async function authMiddleware(req: Request, res: Response, next: NextFunction) {
   // Skip auth for auth routes, public assets, health check
-  const publicPaths = ["/api/auth/", "/api/templates", "/api/health"];
+  const publicPaths = [
+    "/api/auth/",
+    "/api/templates",
+    "/api/health",
+    "/api/marketplace/listings",
+    "/api/marketplace/featured",
+    "/api/marketplace/trending",
+    "/api/marketplace/categories",
+  ];
   if (publicPaths.some(p => req.path.startsWith(p))) return next();
   if (!req.path.startsWith("/api/")) return next();
 

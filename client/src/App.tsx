@@ -18,6 +18,11 @@ import SettingsPage from "@/pages/SettingsPage";
 import TokenUsagePage from "@/pages/TokenUsagePage";
 import LoginPage from "@/pages/LoginPage";
 import AdminPage from "@/pages/AdminPage";
+import MarketplacePage from "@/pages/MarketplacePage";
+import MarketplaceDetailPage from "@/pages/MarketplaceDetailPage";
+import MyListingsPage from "@/pages/MyListingsPage";
+import ToolsPage from "@/pages/ToolsPage";
+import BossPage from "@/pages/BossPage";
 import AppLayout from "@/components/AppLayout";
 import JarvisWidget from "@/components/JarvisWidget";
 import { ThemeProvider } from "./contexts/ThemeContext";
@@ -33,6 +38,7 @@ function AppRouter() {
         <AppLayout>
           <Switch>
             <Route path="/" component={Dashboard} />
+            <Route path="/boss" component={BossPage} />
             <Route path="/workflows" component={WorkflowsPage} />
             <Route path="/workflows/:id" component={WorkflowDetailPage} />
             <Route path="/agents" component={AgentsPage} />
@@ -44,6 +50,10 @@ function AppRouter() {
             <Route path="/settings" component={SettingsPage} />
             <Route path="/usage" component={TokenUsagePage} />
             <Route path="/admin" component={AdminPage} />
+            <Route path="/marketplace" component={MarketplacePage} />
+            <Route path="/marketplace/my" component={MyListingsPage} />
+            <Route path="/marketplace/:id" component={MarketplaceDetailPage} />
+            <Route path="/tools" component={ToolsPage} />
             <Route component={NotFound} />
           </Switch>
         </AppLayout>

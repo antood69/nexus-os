@@ -18,6 +18,7 @@ import {
   type OwnerIntelligence, ownerIntelligence,
   type EmailVerification, emailVerifications,
   type Notification, notifications,
+  type MarketplaceListing, type MarketplacePurchase, type MarketplaceReview,
 } from "@shared/schema";
 import { drizzle } from "drizzle-orm/better-sqlite3";
 import Database from "better-sqlite3";
@@ -246,6 +247,69 @@ sqlite.exec(`
     completed_at TEXT,
     created_at TEXT NOT NULL DEFAULT ''
   );
+  CREATE TABLE IF NOT EXISTS marketplace_listings (
+    id TEXT PRIMARY KEY,
+    seller_id INTEGER NOT NULL,
+    title TEXT NOT NULL,
+    description TEXT NOT NULL DEFAULT '',
+    short_description TEXT,
+    category TEXT NOT NULL DEFAULT 'workflow',
+    listing_type TEXT NOT NULL DEFAULT 'standalone',
+    price_usd REAL NOT NULL DEFAULT 0,
+    price_type TEXT NOT NULL DEFAULT 'free',
+    content_ref TEXT,
+    version TEXT NOT NULL DEFAULT '1.0.0',
+    is_published INTEGER NOT NULL DEFAULT 0,
+    is_verified INTEGER NOT NULL DEFAULT 0,
+    install_count INTEGER NOT NULL DEFAULT 0,
+    rating_avg REAL NOT NULL DEFAULT 0,
+    rating_count INTEGER NOT NULL DEFAULT 0,
+    preview_images TEXT,
+    tags TEXT,
+    created_at TEXT NOT NULL DEFAULT '',
+    updated_at TEXT NOT NULL DEFAULT ''
+  );
+  CREATE TABLE IF NOT EXISTS marketplace_purchases (
+    id TEXT PRIMARY KEY,
+    listing_id TEXT NOT NULL,
+    buyer_id INTEGER NOT NULL,
+    seller_id INTEGER NOT NULL,
+    amount_usd REAL NOT NULL DEFAULT 0,
+    platform_fee_usd REAL NOT NULL DEFAULT 0,
+    seller_payout_usd REAL NOT NULL DEFAULT 0,
+    stripe_payment_id TEXT,
+    stripe_transfer_id TEXT,
+    created_at TEXT NOT NULL DEFAULT ''
+  );
+  CREATE TABLE IF NOT EXISTS marketplace_reviews (
+    id TEXT PRIMARY KEY,
+    listing_id TEXT NOT NULL,
+    buyer_id INTEGER NOT NULL,
+    purchase_id TEXT NOT NULL,
+    rating INTEGER NOT NULL DEFAULT 5,
+    review_text TEXT,
+    is_verified_purchase INTEGER NOT NULL DEFAULT 1,
+    created_at TEXT NOT NULL DEFAULT ''
+  );
+  CREATE TABLE IF NOT EXISTS custom_tools (
+    id TEXT PRIMARY KEY,
+    owner_id INTEGER NOT NULL,
+    name TEXT NOT NULL,
+    description TEXT NOT NULL,
+    tool_type TEXT NOT NULL DEFAULT 'rest_api',
+    endpoint TEXT,
+    method TEXT DEFAULT 'POST',
+    headers TEXT,
+    auth_type TEXT DEFAULT 'none',
+    auth_config TEXT,
+    input_schema TEXT,
+    output_schema TEXT,
+    is_active INTEGER DEFAULT 1,
+    usage_count INTEGER DEFAULT 0,
+    last_used_at TEXT,
+    created_at TEXT DEFAULT (datetime('now')),
+    updated_at TEXT DEFAULT (datetime('now'))
+  );
 `);
 
 // Safe ALTER TABLE for existing DBs that lack new columns
@@ -273,6 +337,27 @@ safeAlter("ALTER TABLE workflows ADD COLUMN fork_count INTEGER DEFAULT 0");
 safeAlter("ALTER TABLE workflows ADD COLUMN use_count INTEGER DEFAULT 0");
 
 export const db = drizzle(sqlite);
+
+// Custom Tool type (raw SQLite, not drizzle-managed)
+export interface CustomTool {
+  id: string;
+  ownerId: number;
+  name: string;
+  description: string;
+  toolType: string;
+  endpoint: string | null;
+  method: string | null;
+  headers: string | null;
+  authType: string | null;
+  authConfig: string | null;
+  inputSchema: string | null;
+  outputSchema: string | null;
+  isActive: number;
+  usageCount: number;
+  lastUsedAt: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
 
 export interface IStorage {
   // Users
@@ -369,6 +454,33 @@ export interface IStorage {
   getUnreadNotificationCount(userId: number): Promise<number>;
   markNotificationRead(id: number): Promise<void>;
   markAllNotificationsRead(userId: number): Promise<void>;
+  // Marketplace Listings
+  createListing(data: Omit<MarketplaceListing, "id" | "installCount" | "ratingAvg" | "ratingCount" | "createdAt" | "updatedAt">): Promise<MarketplaceListing>;
+  getListing(id: string): Promise<MarketplaceListing | undefined>;
+  updateListing(id: string, data: Partial<MarketplaceListing>): Promise<MarketplaceListing | undefined>;
+  deleteListing(id: string): Promise<void>;
+  getListings(opts: { category?: string; search?: string; minRating?: number; priceType?: string; sellerId?: number; isPublished?: number; sortBy?: string; limit?: number; offset?: number }): Promise<MarketplaceListing[]>;
+  getListingsBySeller(sellerId: number): Promise<MarketplaceListing[]>;
+  getFeaturedListings(limit: number): Promise<MarketplaceListing[]>;
+  getTrendingListings(limit: number): Promise<MarketplaceListing[]>;
+  incrementInstallCount(listingId: string): Promise<void>;
+  getCategoryCounts(): Promise<{ category: string; count: number }[]>;
+  // Marketplace Purchases
+  createPurchase(data: Omit<MarketplacePurchase, "id" | "createdAt">): Promise<MarketplacePurchase>;
+  getPurchasesByBuyer(buyerId: number): Promise<MarketplacePurchase[]>;
+  getPurchasesBySeller(sellerId: number): Promise<MarketplacePurchase[]>;
+  hasPurchased(buyerId: number, listingId: string): Promise<boolean>;
+  // Marketplace Reviews
+  createReview(data: Omit<MarketplaceReview, "id" | "createdAt">): Promise<MarketplaceReview>;
+  getReviewsByListing(listingId: string, limit?: number, offset?: number): Promise<MarketplaceReview[]>;
+  getReviewByBuyerAndListing(buyerId: number, listingId: string): Promise<MarketplaceReview | undefined>;
+  // Custom Tools
+  createTool(data: { ownerId: number; name: string; description: string; toolType?: string; endpoint?: string; method?: string; headers?: string; authType?: string; authConfig?: string; inputSchema?: string; outputSchema?: string }): Promise<CustomTool>;
+  getTool(id: string): Promise<CustomTool | undefined>;
+  getToolsByOwner(ownerId: number): Promise<CustomTool[]>;
+  updateTool(id: string, data: Partial<CustomTool>): Promise<CustomTool | undefined>;
+  deleteTool(id: string): Promise<void>;
+  incrementToolUsage(id: string): Promise<void>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -659,6 +771,324 @@ export class DatabaseStorage implements IStorage {
   }
   async markAllNotificationsRead(userId: number) {
     sqlite.prepare('UPDATE notifications SET read = 1 WHERE user_id = ?').run(userId);
+  }
+
+  // ── Marketplace Listings ─────────────────────────────────────────────────
+  async createListing(data: Omit<MarketplaceListing, "id" | "installCount" | "ratingAvg" | "ratingCount" | "createdAt" | "updatedAt">): Promise<MarketplaceListing> {
+    const { v4: uuidv4 } = await import("uuid");
+    const id = uuidv4();
+    const now = new Date().toISOString();
+    sqlite.prepare(`
+      INSERT INTO marketplace_listings
+        (id, seller_id, title, description, short_description, category, listing_type, price_usd, price_type, content_ref, version, is_published, is_verified, install_count, rating_avg, rating_count, preview_images, tags, created_at, updated_at)
+      VALUES
+        (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0, 0, 0, ?, ?, ?, ?)
+    `).run(
+      id, data.sellerId, data.title, data.description, data.shortDescription ?? null,
+      data.category, data.listingType, data.priceUsd, data.priceType,
+      data.contentRef ?? null, data.version, data.isPublished ?? 0, data.isVerified ?? 0,
+      data.previewImages ?? null, data.tags ?? null, now, now
+    );
+    return this.getListing(id) as Promise<MarketplaceListing>;
+  }
+
+  async getListing(id: string): Promise<MarketplaceListing | undefined> {
+    const row = sqlite.prepare('SELECT * FROM marketplace_listings WHERE id = ?').get(id) as any;
+    if (!row) return undefined;
+    return this._mapListing(row);
+  }
+
+  async updateListing(id: string, data: Partial<MarketplaceListing>): Promise<MarketplaceListing | undefined> {
+    const now = new Date().toISOString();
+    const fields: string[] = ['updated_at = ?'];
+    const values: any[] = [now];
+    const colMap: Record<string, string> = {
+      title: 'title', description: 'description', shortDescription: 'short_description',
+      category: 'category', listingType: 'listing_type', priceUsd: 'price_usd',
+      priceType: 'price_type', contentRef: 'content_ref', version: 'version',
+      isPublished: 'is_published', isVerified: 'is_verified', previewImages: 'preview_images',
+      tags: 'tags',
+    };
+    for (const [key, col] of Object.entries(colMap)) {
+      if (key in data) {
+        fields.push(`${col} = ?`);
+        values.push((data as any)[key]);
+      }
+    }
+    values.push(id);
+    sqlite.prepare(`UPDATE marketplace_listings SET ${fields.join(', ')} WHERE id = ?`).run(...values);
+    return this.getListing(id);
+  }
+
+  async deleteListing(id: string): Promise<void> {
+    sqlite.prepare('DELETE FROM marketplace_listings WHERE id = ?').run(id);
+  }
+
+  async getListings(opts: { category?: string; search?: string; minRating?: number; priceType?: string; sellerId?: number; isPublished?: number; sortBy?: string; limit?: number; offset?: number }): Promise<MarketplaceListing[]> {
+    const conditions: string[] = [];
+    const params: any[] = [];
+    if (opts.category) { conditions.push('category = ?'); params.push(opts.category); }
+    if (opts.priceType) { conditions.push('price_type = ?'); params.push(opts.priceType); }
+    if (opts.sellerId !== undefined) { conditions.push('seller_id = ?'); params.push(opts.sellerId); }
+    if (opts.isPublished !== undefined) { conditions.push('is_published = ?'); params.push(opts.isPublished); }
+    if (opts.minRating !== undefined) { conditions.push('rating_avg >= ?'); params.push(opts.minRating); }
+    if (opts.search) {
+      conditions.push('(title LIKE ? OR description LIKE ? OR short_description LIKE ?)');
+      const q = `%${opts.search}%`;
+      params.push(q, q, q);
+    }
+    const where = conditions.length > 0 ? `WHERE ${conditions.join(' AND ')}` : '';
+    let orderBy = 'ORDER BY install_count DESC, rating_avg DESC';
+    if (opts.sortBy === 'newest') orderBy = 'ORDER BY created_at DESC';
+    else if (opts.sortBy === 'rating') orderBy = 'ORDER BY rating_avg DESC, rating_count DESC';
+    const limit = opts.limit ?? 20;
+    const offset = opts.offset ?? 0;
+    params.push(limit, offset);
+    const rows = sqlite.prepare(`SELECT * FROM marketplace_listings ${where} ${orderBy} LIMIT ? OFFSET ?`).all(...params) as any[];
+    return rows.map(r => this._mapListing(r));
+  }
+
+  async getListingsBySeller(sellerId: number): Promise<MarketplaceListing[]> {
+    const rows = sqlite.prepare('SELECT * FROM marketplace_listings WHERE seller_id = ? ORDER BY created_at DESC').all(sellerId) as any[];
+    return rows.map(r => this._mapListing(r));
+  }
+
+  async getFeaturedListings(limit: number): Promise<MarketplaceListing[]> {
+    const rows = sqlite.prepare(
+      'SELECT * FROM marketplace_listings WHERE is_published = 1 ORDER BY rating_avg DESC, install_count DESC LIMIT ?'
+    ).all(limit) as any[];
+    return rows.map(r => this._mapListing(r));
+  }
+
+  async getTrendingListings(limit: number): Promise<MarketplaceListing[]> {
+    // Proxy for trending: most installs overall among published listings (no created_at on purchases for efficient 7-day filter without joins here)
+    const sevenDaysAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString();
+    const rows = sqlite.prepare(`
+      SELECT ml.* FROM marketplace_listings ml
+      INNER JOIN marketplace_purchases mp ON mp.listing_id = ml.id
+      WHERE ml.is_published = 1 AND mp.created_at >= ?
+      GROUP BY ml.id
+      ORDER BY COUNT(mp.id) DESC, ml.install_count DESC
+      LIMIT ?
+    `).all(sevenDaysAgo, limit) as any[];
+    // Fallback to most installed if no recent purchases
+    if (rows.length === 0) {
+      const fallback = sqlite.prepare(
+        'SELECT * FROM marketplace_listings WHERE is_published = 1 ORDER BY install_count DESC LIMIT ?'
+      ).all(limit) as any[];
+      return fallback.map(r => this._mapListing(r));
+    }
+    return rows.map(r => this._mapListing(r));
+  }
+
+  async incrementInstallCount(listingId: string): Promise<void> {
+    sqlite.prepare('UPDATE marketplace_listings SET install_count = install_count + 1, updated_at = ? WHERE id = ?').run(new Date().toISOString(), listingId);
+  }
+
+  async getCategoryCounts(): Promise<{ category: string; count: number }[]> {
+    const rows = sqlite.prepare(
+      'SELECT category, COUNT(*) as count FROM marketplace_listings WHERE is_published = 1 GROUP BY category'
+    ).all() as any[];
+    return rows.map(r => ({ category: r.category, count: r.count }));
+  }
+
+  private _mapListing(row: any): MarketplaceListing {
+    return {
+      id: row.id,
+      sellerId: row.seller_id,
+      title: row.title,
+      description: row.description,
+      shortDescription: row.short_description,
+      category: row.category,
+      listingType: row.listing_type,
+      priceUsd: row.price_usd,
+      priceType: row.price_type,
+      contentRef: row.content_ref,
+      version: row.version,
+      isPublished: row.is_published,
+      isVerified: row.is_verified,
+      installCount: row.install_count,
+      ratingAvg: row.rating_avg,
+      ratingCount: row.rating_count,
+      previewImages: row.preview_images,
+      tags: row.tags,
+      createdAt: row.created_at,
+      updatedAt: row.updated_at,
+    };
+  }
+
+  // ── Marketplace Purchases ─────────────────────────────────────────────────
+  async createPurchase(data: Omit<MarketplacePurchase, "id" | "createdAt">): Promise<MarketplacePurchase> {
+    const { v4: uuidv4 } = await import("uuid");
+    const id = uuidv4();
+    const now = new Date().toISOString();
+    sqlite.prepare(`
+      INSERT INTO marketplace_purchases
+        (id, listing_id, buyer_id, seller_id, amount_usd, platform_fee_usd, seller_payout_usd, stripe_payment_id, stripe_transfer_id, created_at)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    `).run(
+      id, data.listingId, data.buyerId, data.sellerId,
+      data.amountUsd, data.platformFeeUsd, data.sellerPayoutUsd,
+      data.stripePaymentId ?? null, data.stripeTransferId ?? null, now
+    );
+    return { id, ...data, createdAt: now };
+  }
+
+  async getPurchasesByBuyer(buyerId: number): Promise<MarketplacePurchase[]> {
+    const rows = sqlite.prepare('SELECT * FROM marketplace_purchases WHERE buyer_id = ? ORDER BY created_at DESC').all(buyerId) as any[];
+    return rows.map(r => this._mapPurchase(r));
+  }
+
+  async getPurchasesBySeller(sellerId: number): Promise<MarketplacePurchase[]> {
+    const rows = sqlite.prepare('SELECT * FROM marketplace_purchases WHERE seller_id = ? ORDER BY created_at DESC').all(sellerId) as any[];
+    return rows.map(r => this._mapPurchase(r));
+  }
+
+  async hasPurchased(buyerId: number, listingId: string): Promise<boolean> {
+    const row = sqlite.prepare('SELECT id FROM marketplace_purchases WHERE buyer_id = ? AND listing_id = ? LIMIT 1').get(buyerId, listingId);
+    return !!row;
+  }
+
+  private _mapPurchase(row: any): MarketplacePurchase {
+    return {
+      id: row.id,
+      listingId: row.listing_id,
+      buyerId: row.buyer_id,
+      sellerId: row.seller_id,
+      amountUsd: row.amount_usd,
+      platformFeeUsd: row.platform_fee_usd,
+      sellerPayoutUsd: row.seller_payout_usd,
+      stripePaymentId: row.stripe_payment_id,
+      stripeTransferId: row.stripe_transfer_id,
+      createdAt: row.created_at,
+    };
+  }
+
+  // ── Marketplace Reviews ───────────────────────────────────────────────────
+  async createReview(data: Omit<MarketplaceReview, "id" | "createdAt">): Promise<MarketplaceReview> {
+    const { v4: uuidv4 } = await import("uuid");
+    const id = uuidv4();
+    const now = new Date().toISOString();
+    sqlite.prepare(`
+      INSERT INTO marketplace_reviews
+        (id, listing_id, buyer_id, purchase_id, rating, review_text, is_verified_purchase, created_at)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+    `).run(id, data.listingId, data.buyerId, data.purchaseId, data.rating, data.reviewText ?? null, data.isVerifiedPurchase ?? 1, now);
+    // Recalculate listing rating
+    const agg = sqlite.prepare('SELECT AVG(rating) as avg, COUNT(*) as cnt FROM marketplace_reviews WHERE listing_id = ?').get(data.listingId) as any;
+    if (agg) {
+      sqlite.prepare('UPDATE marketplace_listings SET rating_avg = ?, rating_count = ?, updated_at = ? WHERE id = ?')
+        .run(Math.round((agg.avg || 0) * 100) / 100, agg.cnt, now, data.listingId);
+    }
+    return { id, ...data, createdAt: now };
+  }
+
+  async getReviewsByListing(listingId: string, limit = 20, offset = 0): Promise<MarketplaceReview[]> {
+    const rows = sqlite.prepare('SELECT * FROM marketplace_reviews WHERE listing_id = ? ORDER BY created_at DESC LIMIT ? OFFSET ?').all(listingId, limit, offset) as any[];
+    return rows.map(r => this._mapReview(r));
+  }
+
+  async getReviewByBuyerAndListing(buyerId: number, listingId: string): Promise<MarketplaceReview | undefined> {
+    const row = sqlite.prepare('SELECT * FROM marketplace_reviews WHERE buyer_id = ? AND listing_id = ? LIMIT 1').get(buyerId, listingId) as any;
+    if (!row) return undefined;
+    return this._mapReview(row);
+  }
+
+  private _mapReview(row: any): MarketplaceReview {
+    return {
+      id: row.id,
+      listingId: row.listing_id,
+      buyerId: row.buyer_id,
+      purchaseId: row.purchase_id,
+      rating: row.rating,
+      reviewText: row.review_text,
+      isVerifiedPurchase: row.is_verified_purchase,
+      createdAt: row.created_at,
+    };
+  }
+
+  // ── Custom Tools ──────────────────────────────────────────────────────────
+  private _mapTool(row: any): CustomTool {
+    return {
+      id: row.id,
+      ownerId: row.owner_id,
+      name: row.name,
+      description: row.description,
+      toolType: row.tool_type,
+      endpoint: row.endpoint,
+      method: row.method,
+      headers: row.headers,
+      authType: row.auth_type,
+      authConfig: row.auth_config,
+      inputSchema: row.input_schema,
+      outputSchema: row.output_schema,
+      isActive: row.is_active,
+      usageCount: row.usage_count,
+      lastUsedAt: row.last_used_at,
+      createdAt: row.created_at,
+      updatedAt: row.updated_at,
+    };
+  }
+
+  async createTool(data: { ownerId: number; name: string; description: string; toolType?: string; endpoint?: string; method?: string; headers?: string; authType?: string; authConfig?: string; inputSchema?: string; outputSchema?: string }): Promise<CustomTool> {
+    const { v4: uuidv4 } = await import("uuid");
+    const id = uuidv4();
+    const now = new Date().toISOString();
+    sqlite.prepare(`
+      INSERT INTO custom_tools
+        (id, owner_id, name, description, tool_type, endpoint, method, headers, auth_type, auth_config, input_schema, output_schema, is_active, usage_count, last_used_at, created_at, updated_at)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1, 0, NULL, ?, ?)
+    `).run(
+      id, data.ownerId, data.name, data.description,
+      data.toolType ?? 'rest_api',
+      data.endpoint ?? null, data.method ?? 'POST',
+      data.headers ?? null, data.authType ?? 'none',
+      data.authConfig ?? null, data.inputSchema ?? null,
+      data.outputSchema ?? null, now, now
+    );
+    return this.getTool(id) as Promise<CustomTool>;
+  }
+
+  async getTool(id: string): Promise<CustomTool | undefined> {
+    const row = sqlite.prepare('SELECT * FROM custom_tools WHERE id = ?').get(id) as any;
+    if (!row) return undefined;
+    return this._mapTool(row);
+  }
+
+  async getToolsByOwner(ownerId: number): Promise<CustomTool[]> {
+    const rows = sqlite.prepare('SELECT * FROM custom_tools WHERE owner_id = ? ORDER BY created_at DESC').all(ownerId) as any[];
+    return rows.map(r => this._mapTool(r));
+  }
+
+  async updateTool(id: string, data: Partial<CustomTool>): Promise<CustomTool | undefined> {
+    const now = new Date().toISOString();
+    const colMap: Record<string, string> = {
+      name: 'name', description: 'description', toolType: 'tool_type',
+      endpoint: 'endpoint', method: 'method', headers: 'headers',
+      authType: 'auth_type', authConfig: 'auth_config',
+      inputSchema: 'input_schema', outputSchema: 'output_schema',
+      isActive: 'is_active',
+    };
+    const fields: string[] = ['updated_at = ?'];
+    const values: any[] = [now];
+    for (const [key, col] of Object.entries(colMap)) {
+      if (key in data) {
+        fields.push(`${col} = ?`);
+        values.push((data as any)[key]);
+      }
+    }
+    values.push(id);
+    sqlite.prepare(`UPDATE custom_tools SET ${fields.join(', ')} WHERE id = ?`).run(...values);
+    return this.getTool(id);
+  }
+
+  async deleteTool(id: string): Promise<void> {
+    sqlite.prepare('DELETE FROM custom_tools WHERE id = ?').run(id);
+  }
+
+  async incrementToolUsage(id: string): Promise<void> {
+    const now = new Date().toISOString();
+    sqlite.prepare('UPDATE custom_tools SET usage_count = usage_count + 1, last_used_at = ?, updated_at = ? WHERE id = ?').run(now, now, id);
   }
 }
 

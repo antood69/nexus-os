@@ -12,6 +12,9 @@ import {
   Coins,
   LogOut,
   ShieldAlert,
+  Store,
+  MessageSquare,
+  Wrench,
 } from "lucide-react";
 import TokenCounter from "./TokenCounter";
 import NotificationBell from "./NotificationBell";
@@ -20,8 +23,11 @@ import { useEffect } from "react";
 
 const navItems = [
   { href: "/", label: "Dashboard", icon: LayoutDashboard },
+  { href: "/boss", label: "The Boss", icon: MessageSquare },
   { href: "/workflows", label: "Workflows", icon: GitBranch },
   { href: "/agents", label: "Agents", icon: Bot },
+  { href: "/marketplace", label: "Marketplace", icon: Store },
+  { href: "/tools", label: "Tools", icon: Wrench },
   { href: "/audit", label: "Auditor", icon: ShieldCheck },
   { href: "/journal", label: "Trade Journal", icon: BookOpen },
   { href: "/bot-challenge", label: "Bot Challenge", icon: Target },

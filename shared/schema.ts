@@ -229,6 +229,58 @@ export const insertTokenUsageSchema = createInsertSchema(tokenUsage).omit({ id: 
 export type InsertTokenUsage = z.infer<typeof insertTokenUsageSchema>;
 export type TokenUsageRecord = typeof tokenUsage.$inferSelect;
 
+// ── Marketplace ─────────────────────────────────────────────────────────────
+
+// MarketplaceListing — items published to the public marketplace
+export type MarketplaceListing = {
+  id: string;
+  sellerId: number;
+  title: string;
+  description: string;
+  shortDescription: string | null;
+  category: "workflow" | "agent" | "tool" | "prompt_pack" | "theme";
+  listingType: string;
+  priceUsd: number; // 0 = free
+  priceType: "one_time" | "monthly" | "free";
+  contentRef: string | null; // JSON
+  version: string;
+  isPublished: number; // 0 | 1
+  isVerified: number; // 0 | 1
+  installCount: number;
+  ratingAvg: number;
+  ratingCount: number;
+  previewImages: string | null; // JSON array
+  tags: string | null; // JSON array
+  createdAt: string;
+  updatedAt: string;
+};
+
+// MarketplacePurchase — records of purchases / installs
+export type MarketplacePurchase = {
+  id: string;
+  listingId: string;
+  buyerId: number;
+  sellerId: number;
+  amountUsd: number;
+  platformFeeUsd: number;
+  sellerPayoutUsd: number;
+  stripePaymentId: string | null;
+  stripeTransferId: string | null;
+  createdAt: string;
+};
+
+// MarketplaceReview — buyer reviews for a listing
+export type MarketplaceReview = {
+  id: string;
+  listingId: string;
+  buyerId: number;
+  purchaseId: string;
+  rating: number; // 1-5
+  reviewText: string | null;
+  isVerifiedPurchase: number; // 0 | 1
+  createdAt: string;
+};
+
 // Token Packs — purchased add-on token bundles
 export const tokenPacks = sqliteTable("token_packs", {
   id: integer("id").primaryKey({ autoIncrement: true }),

@@ -6,6 +6,7 @@ import { runAgentChat } from "./ai";
 import { registerStripeRoutes } from "./stripe";
 import { executeWorkflowRun } from "./orchestrator";
 import { createAuthRouter, createOwnerRouter, authMiddleware, collectIntelligence } from "./auth";
+import { createMarketplaceRouter } from "./marketplace";
 import cookieParser from "cookie-parser";
 
 export async function registerRoutes(
@@ -18,6 +19,7 @@ export async function registerRoutes(
   app.use("/api/auth", createAuthRouter());
   app.use(authMiddleware);
   app.use("/api/owner", createOwnerRouter());
+  app.use("/api/marketplace", createMarketplaceRouter());
 
   // === WORKFLOWS ===
   app.get("/api/workflows", async (_req, res) => {
@@ -335,22 +337,15 @@ export async function registerRoutes(
 
   // === JARVIS CHAT ===
   app.post("/api/jarvis/chat", async (req, res) => {
-    const { message, context } = req.body as { message: string; context?: string };
+    const { message, context, history } = req.body as { message: string; context?: string; history?: { role: "user" | "assistant"; content: string }[] };
     if (!message) return res.status(400).json({ error: "message required" });
 
-    const systemPrompt = `You are Jarvis, the AI assistant for Bunz — an AI agent orchestration platform. You have full awareness of the platform and can help with:
-- Creating and managing workflows, agents, and jobs
-- Trading strategy questions and prop firm guidance  
-- Analyzing audit results and escalations
-- Controlling desktop apps and browser automation (tell user to enable Desktop Agent)
-- Any general questions
-
-Current page context: ${context || "unknown"}
-Be concise, direct, and helpful. If asked to perform an action, explain what you would do step by step.`;
+    const systemPrompt = `You are The Boss, the AI brain behind Bunz. You're sharp, efficient, and a little cocky — like a founder who's been through it. Help users build workflows, create agents, understand their data, and ship faster. Keep it real, keep it brief, and always push toward action.`;
 
     try {
       const { runAgentChat } = await import("./ai");
-      const { reply, inputTokens, outputTokens, totalTokens } = await runAgentChat("claude-sonnet", systemPrompt, [], message);
+      const chatHistory = Array.isArray(history) ? history : [];
+      const { reply, inputTokens, outputTokens, totalTokens } = await runAgentChat("claude-sonnet", systemPrompt, chatHistory, message);
 
       const jarvisUserId = req.user?.id || 1;
       await storage.recordTokenUsage({
@@ -573,6 +568,48 @@ Be concise, direct, and helpful. If asked to perform an action, explain what you
   app.post("/api/notifications/read-all", async (req, res) => {
     const userId = req.user?.id || 1;
     await storage.markAllNotificationsRead(userId);
+    res.json({ ok: true });
+  });
+
+  // ── Tools Management ──────────────────────────────────────────────────────────
+  app.get("/api/tools", async (req, res) => {
+    const userId = req.user?.id || 1;
+    const tools = await storage.getToolsByOwner(userId);
+    res.json(tools);
+  });
+
+  app.post("/api/tools", async (req, res) => {
+    const { name, description, toolType, endpoint, method, headers, authType, authConfig, inputSchema, outputSchema } = req.body;
+    if (!name || !description) return res.status(400).json({ error: "Name and description required" });
+    const userId = req.user?.id || 1;
+    const tool = await storage.createTool({
+      ownerId: userId,
+      name, description, toolType: toolType || 'rest_api',
+      endpoint, method, headers, authType, authConfig, inputSchema, outputSchema
+    });
+    res.status(201).json(tool);
+  });
+
+  app.get("/api/tools/:id", async (req, res) => {
+    const userId = req.user?.id || 1;
+    const tool = await storage.getTool(req.params.id);
+    if (!tool || tool.ownerId !== userId) return res.status(404).json({ error: "Tool not found" });
+    res.json(tool);
+  });
+
+  app.put("/api/tools/:id", async (req, res) => {
+    const userId = req.user?.id || 1;
+    const tool = await storage.getTool(req.params.id);
+    if (!tool || tool.ownerId !== userId) return res.status(403).json({ error: "Not authorized" });
+    const updated = await storage.updateTool(req.params.id, req.body);
+    res.json(updated);
+  });
+
+  app.delete("/api/tools/:id", async (req, res) => {
+    const userId = req.user?.id || 1;
+    const tool = await storage.getTool(req.params.id);
+    if (!tool || tool.ownerId !== userId) return res.status(403).json({ error: "Not authorized" });
+    await storage.deleteTool(req.params.id);
     res.json({ ok: true });
   });
 
