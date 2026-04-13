@@ -16,6 +16,12 @@ import {
   MessageSquare,
   Wrench,
   Palette,
+  Layers,
+  Briefcase,
+  Mic,
+  Cpu,
+  Building2,
+  Trophy,
 } from "lucide-react";
 import TokenCounter from "./TokenCounter";
 import NotificationBell from "./NotificationBell";
@@ -38,6 +44,12 @@ const navItems = [
   { href: "/bot-challenge", label: "Bot Challenge", icon: Target },
   { href: "/pricing", label: "Pricing", icon: CreditCard },
   { href: "/usage", label: "Usage", icon: Coins },
+  { href: "/stacks", label: "Account Stacks", icon: Layers },
+  { href: "/fiverr", label: "Fiverr", icon: Briefcase },
+  { href: "/jarvis", label: "Jarvis", icon: Mic },
+  { href: "/app-generator", label: "App Gen", icon: Cpu },
+  { href: "/white-label", label: "White Label", icon: Building2 },
+  { href: "/prop-trading", label: "Prop Trading", icon: Trophy },
   { href: "/customize", label: "Customize", icon: Palette },
   { href: "/settings", label: "Settings", icon: Settings },
 ];

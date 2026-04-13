@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import {
   Plus,
@@ -20,6 +20,12 @@ import {
   ArrowDownLeft,
   DollarSign,
   Activity,
+  Calendar,
+  Tag,
+  Bot,
+  Copy,
+  Clock,
+  Filter,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
@@ -1375,10 +1381,367 @@ function QuickTradePanel({ connections }: { connections: BrokerConnection[] }) {
 }
 
 // ── Main Page ──────────────────────────────────────────────────────────────────
+// ── Economic Calendar Tab ─────────────────────────────────────────────────────
+type CalendarEvent = {
+  title: string;
+  country: string;
+  date: string;
+  time: string;
+  impact: string;
+  forecast: string;
+  previous: string;
+  actual: string;
+};
+
+function EconomicCalendarTab() {
+  const { data: events = [], isLoading } = useQuery<CalendarEvent[]>({
+    queryKey: ["/api/forex-calendar"],
+  });
+  const [impactFilter, setImpactFilter] = useState<string>("");
+  const [countryFilter, setCountryFilter] = useState<string>("");
+
+  const filtered = events.filter(e => {
+    if (impactFilter && e.impact?.toLowerCase() !== impactFilter) return false;
+    if (countryFilter && e.country !== countryFilter) return false;
+    return true;
+  });
+
+  const countries = Array.from(new Set(events.map(e => e.country).filter(Boolean)));
+
+  const impactColor = (impact: string) => {
+    const l = impact?.toLowerCase() || "";
+    if (l === "high" || l === "holiday") return "bg-red-500/15 text-red-400";
+    if (l === "medium") return "bg-orange-500/15 text-orange-400";
+    if (l === "low") return "bg-yellow-500/15 text-yellow-400";
+    return "bg-zinc-500/15 text-zinc-400";
+  };
+
+  // Find next major event
+  const now = new Date();
+  const upcoming = events
+    .filter(e => e.impact?.toLowerCase() === "high" && e.date)
+    .map(e => ({ ...e, dt: new Date(e.date + (e.time ? " " + e.time : "")) }))
+    .filter(e => e.dt > now)
+    .sort((a, b) => a.dt.getTime() - b.dt.getTime());
+  const nextMajor = upcoming[0];
+
+  const [countdown, setCountdown] = useState("");
+  useEffect(() => {
+    if (!nextMajor) return;
+    const tick = () => {
+      const diff = nextMajor.dt.getTime() - Date.now();
+      if (diff <= 0) { setCountdown("NOW"); return; }
+      const h = Math.floor(diff / 3600000);
+      const m = Math.floor((diff % 3600000) / 60000);
+      const s = Math.floor((diff % 60000) / 1000);
+      setCountdown(`${h}h ${m}m ${s}s`);
+    };
+    tick();
+    const id = setInterval(tick, 1000);
+    return () => clearInterval(id);
+  }, [nextMajor?.dt?.getTime()]);
+
+  if (isLoading) return <div className="text-center py-12 text-muted-foreground">Loading calendar...</div>;
+
+  return (
+    <div className="space-y-4">
+      {nextMajor && (
+        <div className="bg-gradient-to-r from-red-500/10 to-orange-500/10 border border-red-500/20 rounded-lg p-4 flex items-center justify-between">
+          <div>
+            <p className="text-sm font-medium text-foreground">Next Major Event</p>
+            <p className="text-xs text-muted-foreground">{nextMajor.title} ({nextMajor.country})</p>
+          </div>
+          <div className="flex items-center gap-2">
+            <Clock className="w-4 h-4 text-red-400" />
+            <span className="text-lg font-bold text-red-400 font-mono">{countdown}</span>
+          </div>
+        </div>
+      )}
+
+      <div className="flex items-center gap-3">
+        <Filter className="w-4 h-4 text-muted-foreground" />
+        <div className="flex gap-1.5">
+          {["", "high", "medium", "low"].map(i => (
+            <button key={i} onClick={() => setImpactFilter(i)} className={`px-3 py-1 rounded text-xs font-medium border ${impactFilter === i ? "bg-primary/20 border-primary/40 text-primary" : "bg-background border-border text-muted-foreground"}`}>
+              {i || "All"}
+            </button>
+          ))}
+        </div>
+        <select className="px-2 py-1 bg-background border border-border rounded text-xs text-foreground" value={countryFilter} onChange={e => setCountryFilter(e.target.value)}>
+          <option value="">All Countries</option>
+          {countries.map(c => <option key={c} value={c}>{c}</option>)}
+        </select>
+      </div>
+
+      <div className="bg-card border border-border rounded-lg overflow-hidden">
+        <table className="w-full text-sm">
+          <thead>
+            <tr className="border-b border-border text-xs text-muted-foreground">
+              <th className="text-left p-3">Event</th>
+              <th className="text-left p-3">Country</th>
+              <th className="text-left p-3">Date</th>
+              <th className="text-left p-3">Time</th>
+              <th className="text-center p-3">Impact</th>
+              <th className="text-right p-3">Forecast</th>
+              <th className="text-right p-3">Previous</th>
+              <th className="text-right p-3">Actual</th>
+            </tr>
+          </thead>
+          <tbody>
+            {filtered.map((e, i) => (
+              <tr key={i} className="border-b border-border/50 hover:bg-secondary/30">
+                <td className="p-3 text-foreground font-medium">{e.title}</td>
+                <td className="p-3 text-muted-foreground">{e.country}</td>
+                <td className="p-3 text-muted-foreground">{e.date}</td>
+                <td className="p-3 text-muted-foreground">{e.time || "—"}</td>
+                <td className="p-3 text-center">
+                  <span className={`px-2 py-0.5 rounded text-xs font-medium ${impactColor(e.impact)}`}>
+                    {e.impact || "—"}
+                  </span>
+                </td>
+                <td className="p-3 text-right text-muted-foreground">{e.forecast || "—"}</td>
+                <td className="p-3 text-right text-muted-foreground">{e.previous || "—"}</td>
+                <td className="p-3 text-right text-foreground font-medium">{e.actual || "—"}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+        {filtered.length === 0 && (
+          <div className="text-center py-8 text-muted-foreground text-sm">No events match filters.</div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+// ── Prop Deals Tab ────────────────────────────────────────────────────────────
+type PropDeal = {
+  firm: string;
+  accountSize: string;
+  originalPrice: number;
+  salePrice: number;
+  discount: number;
+  promoCode: string;
+  expiry: string;
+};
+
+const PROP_DEALS: PropDeal[] = [
+  { firm: "Apex", accountSize: "$50K", originalPrice: 167, salePrice: 84, discount: 50, promoCode: "BUNZ50", expiry: "2026-05-01" },
+  { firm: "FTMO", accountSize: "$100K", originalPrice: 540, salePrice: 432, discount: 20, promoCode: "BUNZ20", expiry: "2026-04-30" },
+  { firm: "Topstep", accountSize: "$50K", originalPrice: 165, salePrice: 99, discount: 40, promoCode: "BUNZ40", expiry: "2026-05-15" },
+  { firm: "MyForexFunds", accountSize: "$100K", originalPrice: 499, salePrice: 349, discount: 30, promoCode: "BUNZ30", expiry: "2026-04-28" },
+  { firm: "The5%ers", accountSize: "$100K", originalPrice: 275, salePrice: 220, discount: 20, promoCode: "BUNZ20", expiry: "2026-05-10" },
+  { firm: "TradeDay", accountSize: "$50K", originalPrice: 125, salePrice: 75, discount: 40, promoCode: "BUNZ40", expiry: "2026-05-05" },
+  { firm: "Funded Next", accountSize: "$100K", originalPrice: 549, salePrice: 384, discount: 30, promoCode: "BUNZ30", expiry: "2026-04-25" },
+  { firm: "Bulenox", accountSize: "$50K", originalPrice: 155, salePrice: 93, discount: 40, promoCode: "BUNZ40", expiry: "2026-05-20" },
+];
+
+function PropDealsTab() {
+  const [copiedCode, setCopiedCode] = useState<string | null>(null);
+  const sorted = [...PROP_DEALS].sort((a, b) => b.discount - a.discount);
+
+  const copyCode = (code: string) => {
+    navigator.clipboard.writeText(code);
+    setCopiedCode(code);
+    setTimeout(() => setCopiedCode(null), 2000);
+  };
+
+  return (
+    <div className="space-y-4">
+      <p className="text-sm text-muted-foreground">Curated prop firm deals sorted by best discount.</p>
+      <div className="grid gap-4 md:grid-cols-2">
+        {sorted.map((deal, i) => (
+          <div key={i} className="bg-card border border-border rounded-lg p-4 space-y-3">
+            <div className="flex items-start justify-between">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-lg bg-primary/10 flex items-center justify-center text-primary font-bold text-sm">
+                  {deal.firm[0]}
+                </div>
+                <div>
+                  <h3 className="font-semibold text-foreground">{deal.firm}</h3>
+                  <span className="text-xs text-muted-foreground">{deal.accountSize}</span>
+                </div>
+              </div>
+              <span className="px-2 py-0.5 rounded bg-emerald-500/15 text-emerald-400 text-xs font-bold">{deal.discount}% OFF</span>
+            </div>
+            <div className="flex items-baseline gap-2">
+              <span className="text-lg font-bold text-foreground">${deal.salePrice}</span>
+              <span className="text-sm line-through text-muted-foreground">${deal.originalPrice}</span>
+            </div>
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <code className="bg-background border border-border px-2 py-1 rounded text-xs font-mono text-foreground">{deal.promoCode}</code>
+                <button onClick={() => copyCode(deal.promoCode)} className="text-xs text-primary hover:underline flex items-center gap-1">
+                  <Copy className="w-3 h-3" />
+                  {copiedCode === deal.promoCode ? "Copied!" : "Copy"}
+                </button>
+              </div>
+              <span className="text-[10px] text-muted-foreground">Exp: {deal.expiry}</span>
+            </div>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+// ── Bot Deploy Tab ────────────────────────────────────────────────────────────
+type TradingBotSummary = {
+  id: string;
+  name: string;
+  status: string;
+  timeframe: string;
+};
+
+type BotDeploymentType = {
+  id: string;
+  botId: string;
+  connectionId: string;
+  status: string;
+  maxPositionSize: number;
+  maxDailyLoss: number;
+  maxTradesPerDay: number;
+  totalTrades: number;
+  totalPnl: number;
+};
+
+function BotDeployTab() {
+  const qc = useQueryClient();
+  const [showDeploy, setShowDeploy] = useState(false);
+  const [selectedBot, setSelectedBot] = useState("");
+  const [selectedConn, setSelectedConn] = useState("");
+  const [maxPos, setMaxPos] = useState("1");
+  const [maxLoss, setMaxLoss] = useState("500");
+  const [maxTrades, setMaxTrades] = useState("10");
+
+  const { data: bots = [] } = useQuery<TradingBotSummary[]>({ queryKey: ["/api/trading-bots"] });
+  const { data: connections = [] } = useQuery<BrokerConnection[]>({ queryKey: ["/api/broker-connections"] });
+  const { data: deployments = [] } = useQuery<BotDeploymentType[]>({ queryKey: ["/api/bot-deployments"] });
+
+  const createDeploy = useMutation({
+    mutationFn: async () => {
+      const { apiRequest } = await import("@/lib/queryClient");
+      await apiRequest("POST", "/api/bot-deployments", {
+        botId: selectedBot,
+        connectionId: selectedConn,
+        maxPositionSize: Number(maxPos),
+        maxDailyLoss: Number(maxLoss),
+        maxTradesPerDay: Number(maxTrades),
+      });
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["/api/bot-deployments"] });
+      setShowDeploy(false);
+    },
+  });
+
+  const toggleDeploy = useMutation({
+    mutationFn: async ({ id, status }: { id: string; status: string }) => {
+      const { apiRequest } = await import("@/lib/queryClient");
+      await apiRequest("PUT", `/api/bot-deployments/${id}`, { status: status === "running" ? "stopped" : "running" });
+    },
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["/api/bot-deployments"] }),
+  });
+
+  const deleteDeploy = useMutation({
+    mutationFn: async (id: string) => {
+      const { apiRequest } = await import("@/lib/queryClient");
+      await apiRequest("DELETE", `/api/bot-deployments/${id}`);
+    },
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["/api/bot-deployments"] }),
+  });
+
+  const getBotName = (botId: string) => bots.find(b => b.id === botId)?.name || botId;
+  const getConnLabel = (connId: string) => {
+    const c = connections.find(x => x.id === connId);
+    return c ? (c.label || `${c.broker}`) : connId;
+  };
+
+  return (
+    <div className="space-y-4">
+      <div className="flex items-center justify-between">
+        <p className="text-sm text-muted-foreground">Deploy AI bots to broker connections for automated trading.</p>
+        <Button size="sm" onClick={() => setShowDeploy(true)} className="gap-1"><Bot className="w-3 h-3" /> Deploy Bot</Button>
+      </div>
+
+      {showDeploy && (
+        <div className="bg-card border border-border rounded-lg p-4 space-y-3">
+          <h3 className="font-semibold text-foreground text-sm">New Deployment</h3>
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className="text-xs text-muted-foreground">Bot</label>
+              <select className="w-full mt-1 px-3 py-2 bg-background border border-border rounded-md text-sm text-foreground" value={selectedBot} onChange={e => setSelectedBot(e.target.value)}>
+                <option value="">Select bot...</option>
+                {bots.map(b => <option key={b.id} value={b.id}>{b.name}</option>)}
+              </select>
+            </div>
+            <div>
+              <label className="text-xs text-muted-foreground">Broker Connection</label>
+              <select className="w-full mt-1 px-3 py-2 bg-background border border-border rounded-md text-sm text-foreground" value={selectedConn} onChange={e => setSelectedConn(e.target.value)}>
+                <option value="">Select connection...</option>
+                {connections.map(c => <option key={c.id} value={c.id}>{c.label || c.broker}</option>)}
+              </select>
+            </div>
+            <div>
+              <label className="text-xs text-muted-foreground">Max Position Size</label>
+              <input type="number" className="w-full mt-1 px-3 py-2 bg-background border border-border rounded-md text-sm text-foreground" value={maxPos} onChange={e => setMaxPos(e.target.value)} />
+            </div>
+            <div>
+              <label className="text-xs text-muted-foreground">Max Daily Loss ($)</label>
+              <input type="number" className="w-full mt-1 px-3 py-2 bg-background border border-border rounded-md text-sm text-foreground" value={maxLoss} onChange={e => setMaxLoss(e.target.value)} />
+            </div>
+          </div>
+          <div className="flex gap-2">
+            <Button size="sm" onClick={() => createDeploy.mutate()} disabled={!selectedBot || !selectedConn}>Deploy</Button>
+            <Button size="sm" variant="outline" onClick={() => setShowDeploy(false)}>Cancel</Button>
+          </div>
+        </div>
+      )}
+
+      {deployments.length === 0 && !showDeploy && (
+        <div className="text-center py-12 text-muted-foreground">
+          <Bot className="w-10 h-10 mx-auto mb-2 opacity-40" />
+          <p className="text-sm">No bot deployments yet.</p>
+        </div>
+      )}
+
+      <div className="space-y-3">
+        {deployments.map(dep => (
+          <div key={dep.id} className="bg-card border border-border rounded-lg p-4 flex items-center justify-between">
+            <div>
+              <div className="flex items-center gap-2">
+                <span className="font-medium text-foreground">{getBotName(dep.botId)}</span>
+                <span className="text-xs text-muted-foreground">→ {getConnLabel(dep.connectionId)}</span>
+              </div>
+              <div className="flex gap-3 mt-1 text-xs text-muted-foreground">
+                <span>Trades: {dep.totalTrades}</span>
+                <span className={dep.totalPnl >= 0 ? "text-emerald-400" : "text-red-400"}>P&L: {dep.totalPnl >= 0 ? "+" : ""}${dep.totalPnl.toFixed(2)}</span>
+                <span>Max Pos: {dep.maxPositionSize}</span>
+              </div>
+            </div>
+            <div className="flex items-center gap-2">
+              <span className={`px-2 py-0.5 rounded text-xs font-medium ${dep.status === "running" ? "bg-emerald-500/10 text-emerald-400" : "bg-zinc-500/10 text-zinc-400"}`}>
+                {dep.status}
+              </span>
+              <Button size="sm" variant="outline" onClick={() => toggleDeploy.mutate({ id: dep.id, status: dep.status })}>
+                {dep.status === "running" ? "Stop" : "Start"}
+              </Button>
+              <Button size="sm" variant="ghost" onClick={() => deleteDeploy.mutate(dep.id)}>
+                <Trash2 className="w-3.5 h-3.5 text-destructive" />
+              </Button>
+            </div>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
 export default function TradingJournalPage() {
   const [showForm, setShowForm] = useState(false);
   const [filterDirection, setFilterDirection] = useState<string>("");
   const [filterSymbol, setFilterSymbol] = useState<string>("");
+  const [activeTab, setActiveTab] = useState<"journal" | "calendar" | "deals" | "deploy">("journal");
 
   const params = new URLSearchParams();
   if (filterDirection) params.set("direction", filterDirection);
@@ -1405,19 +1768,56 @@ export default function TradingJournalPage() {
   return (
     <div className="p-6 max-w-5xl mx-auto">
       {/* Header */}
-      <div className="flex items-center justify-between mb-6">
+      <div className="flex items-center justify-between mb-4">
         <div>
           <h1 className="text-2xl font-bold text-foreground">Trading Journal</h1>
           <p className="text-sm text-muted-foreground mt-0.5">Track, analyze, and improve your trading performance</p>
         </div>
-        <Button
-          onClick={() => setShowForm((p) => !p)}
-          className="bg-gradient-to-r from-indigo-500 to-violet-600 hover:from-indigo-600 hover:to-violet-700 text-white"
-        >
-          <Plus className="w-4 h-4 mr-2" />
-          Add Trade
-        </Button>
+        {activeTab === "journal" && (
+          <Button
+            onClick={() => setShowForm((p) => !p)}
+            className="bg-gradient-to-r from-indigo-500 to-violet-600 hover:from-indigo-600 hover:to-violet-700 text-white"
+          >
+            <Plus className="w-4 h-4 mr-2" />
+            Add Trade
+          </Button>
+        )}
       </div>
+
+      {/* Tab Bar */}
+      <div className="flex gap-1 mb-6 border-b border-border">
+        {([
+          { key: "journal", label: "Journal", icon: BarChart2 },
+          { key: "calendar", label: "Calendar", icon: Calendar },
+          { key: "deals", label: "Prop Deals", icon: Tag },
+          { key: "deploy", label: "Bot Deploy", icon: Bot },
+        ] as const).map(tab => (
+          <button
+            key={tab.key}
+            onClick={() => setActiveTab(tab.key)}
+            className={`flex items-center gap-1.5 px-4 py-2.5 text-sm font-medium border-b-2 transition-colors ${
+              activeTab === tab.key
+                ? "border-primary text-primary"
+                : "border-transparent text-muted-foreground hover:text-foreground"
+            }`}
+          >
+            <tab.icon className="w-3.5 h-3.5" />
+            {tab.label}
+          </button>
+        ))}
+      </div>
+
+      {/* Calendar Tab */}
+      {activeTab === "calendar" && <EconomicCalendarTab />}
+
+      {/* Prop Deals Tab */}
+      {activeTab === "deals" && <PropDealsTab />}
+
+      {/* Bot Deploy Tab */}
+      {activeTab === "deploy" && <BotDeployTab />}
+
+      {/* Journal Tab Content */}
+      {activeTab === "journal" && <>
 
       {/* Broker Connections Panel */}
       <BrokerConnectionsPanel />
@@ -1539,6 +1939,8 @@ export default function TradingJournalPage() {
           ))}
         </div>
       )}
+
+      </>}
     </div>
   );
 }

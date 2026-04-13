@@ -24,6 +24,12 @@ import MyListingsPage from "@/pages/MyListingsPage";
 import ToolsPage from "@/pages/ToolsPage";
 import BossPage from "@/pages/BossPage";
 import CustomizationPage from "@/pages/CustomizationPage";
+import AccountStacksPage from "@/pages/AccountStacksPage";
+import FiverrPage from "@/pages/FiverrPage";
+import JarvisPage from "@/pages/JarvisPage";
+import AppGeneratorPage from "@/pages/AppGeneratorPage";
+import WhiteLabelPage from "@/pages/WhiteLabelPage";
+import PropTradingPage from "@/pages/PropTradingPage";
 import AppLayout from "@/components/AppLayout";
 import JarvisWidget from "@/components/JarvisWidget";
 import { ThemeProvider } from "./contexts/ThemeContext";
@@ -56,6 +62,12 @@ function AppRouter() {
             <Route path="/marketplace/:id" component={MarketplaceDetailPage} />
             <Route path="/tools" component={ToolsPage} />
             <Route path="/customize" component={CustomizationPage} />
+            <Route path="/stacks" component={AccountStacksPage} />
+            <Route path="/fiverr" component={FiverrPage} />
+            <Route path="/jarvis" component={JarvisPage} />
+            <Route path="/app-generator" component={AppGeneratorPage} />
+            <Route path="/white-label" component={WhiteLabelPage} />
+            <Route path="/prop-trading" component={PropTradingPage} />
             <Route component={NotFound} />
           </Switch>
         </AppLayout>

@@ -853,5 +853,376 @@ export async function registerRoutes(
     }
   });
 
+  // ── Forex Calendar ─────────────────────────────────────────────────────────
+  let forexCalendarCache: { data: any; fetchedAt: number } | null = null;
+  app.get("/api/forex-calendar", async (_req, res) => {
+    const FIVE_MIN = 5 * 60 * 1000;
+    if (forexCalendarCache && Date.now() - forexCalendarCache.fetchedAt < FIVE_MIN) {
+      return res.json(forexCalendarCache.data);
+    }
+    try {
+      const resp = await fetch("https://nfs.faireconomy.media/ff_calendar_thisweek.json");
+      const data = await resp.json();
+      forexCalendarCache = { data, fetchedAt: Date.now() };
+      res.json(data);
+    } catch (err: any) {
+      res.status(500).json({ error: err.message });
+    }
+  });
+
+  // ── Account Stacks ────────────────────────────────────────────────────────
+  app.get("/api/account-stacks", async (req, res) => {
+    const userId = req.user?.id || 1;
+    const stacks = await storage.getAccountStacks(userId);
+    const result = [];
+    for (const stack of stacks) {
+      const followers = await storage.getStackFollowers(stack.id);
+      result.push({ ...stack, followers });
+    }
+    res.json(result);
+  });
+
+  app.post("/api/account-stacks", async (req, res) => {
+    const userId = req.user?.id || 1;
+    const { name, leaderConnectionId, copyMode, sizeMultiplier, followerConnectionIds } = req.body;
+    if (!name || !leaderConnectionId) return res.status(400).json({ error: "name and leaderConnectionId required" });
+    const stack = await storage.createAccountStack({ userId, name, leaderConnectionId, copyMode, sizeMultiplier });
+    if (Array.isArray(followerConnectionIds)) {
+      for (const cid of followerConnectionIds) {
+        await storage.addStackFollower({ stackId: stack.id, connectionId: cid });
+      }
+    }
+    const followers = await storage.getStackFollowers(stack.id);
+    res.status(201).json({ ...stack, followers });
+  });
+
+  app.delete("/api/account-stacks/:id", async (req, res) => {
+    const userId = req.user?.id || 1;
+    const stack = await storage.getAccountStack(req.params.id);
+    if (!stack || stack.userId !== userId) return res.status(404).json({ error: "Not found" });
+    await storage.deleteAccountStack(req.params.id);
+    res.json({ ok: true });
+  });
+
+  app.post("/api/account-stacks/:id/followers", async (req, res) => {
+    const userId = req.user?.id || 1;
+    const stack = await storage.getAccountStack(req.params.id);
+    if (!stack || stack.userId !== userId) return res.status(404).json({ error: "Not found" });
+    const { connectionId, sizeMultiplier } = req.body;
+    if (!connectionId) return res.status(400).json({ error: "connectionId required" });
+    const follower = await storage.addStackFollower({ stackId: req.params.id, connectionId, sizeMultiplier });
+    res.status(201).json(follower);
+  });
+
+  app.delete("/api/account-stacks/:id/followers/:fid", async (req, res) => {
+    const userId = req.user?.id || 1;
+    const stack = await storage.getAccountStack(req.params.id);
+    if (!stack || stack.userId !== userId) return res.status(404).json({ error: "Not found" });
+    await storage.removeStackFollower(req.params.fid);
+    res.json({ ok: true });
+  });
+
+  // ── Trading Bots ──────────────────────────────────────────────────────────
+  app.get("/api/trading-bots", async (req, res) => {
+    const userId = req.user?.id || 1;
+    const bots = await storage.getTradingBots(userId);
+    res.json(bots);
+  });
+
+  app.post("/api/trading-bots", async (req, res) => {
+    const userId = req.user?.id || 1;
+    const bot = await storage.createTradingBot({ ...req.body, userId });
+    res.status(201).json(bot);
+  });
+
+  app.put("/api/trading-bots/:id", async (req, res) => {
+    const userId = req.user?.id || 1;
+    const bot = await storage.getTradingBot(req.params.id);
+    if (!bot || bot.userId !== userId) return res.status(404).json({ error: "Not found" });
+    const updated = await storage.updateTradingBot(req.params.id, req.body);
+    res.json(updated);
+  });
+
+  app.delete("/api/trading-bots/:id", async (req, res) => {
+    const userId = req.user?.id || 1;
+    const bot = await storage.getTradingBot(req.params.id);
+    if (!bot || bot.userId !== userId) return res.status(404).json({ error: "Not found" });
+    await storage.deleteTradingBot(req.params.id);
+    res.json({ ok: true });
+  });
+
+  app.post("/api/trading-bots/:id/generate", async (req, res) => {
+    const userId = req.user?.id || 1;
+    const bot = await storage.getTradingBot(req.params.id);
+    if (!bot || bot.userId !== userId) return res.status(404).json({ error: "Not found" });
+    try {
+      const { runAgentChat } = await import("./ai");
+      const systemPrompt = `You are an expert algorithmic trading strategy designer. Given a trading strategy description, generate specific: indicators (technical indicators to use), entry_rules (when to enter a trade), exit_rules (when to exit a trade), and risk_rules (position sizing, stop losses). Format your response as JSON with keys: indicators, entryRules, exitRules, riskRules. Each should be a clear, actionable string.`;
+      const prompt = `Strategy: ${bot.name}\nDescription: ${bot.description || 'No description'}\nTimeframe: ${bot.timeframe}\nSymbols: ${bot.symbols}\n\nGenerate trading rules for this strategy.`;
+      const { reply } = await runAgentChat("claude-sonnet", systemPrompt, [], prompt);
+      let parsed: any = {};
+      try {
+        const jsonMatch = reply.match(/\{[\s\S]*\}/);
+        if (jsonMatch) parsed = JSON.parse(jsonMatch[0]);
+      } catch { parsed = { indicators: reply, entryRules: '', exitRules: '', riskRules: '' }; }
+      const updated = await storage.updateTradingBot(req.params.id, {
+        indicators: parsed.indicators || reply,
+        entryRules: parsed.entryRules || parsed.entry_rules || '',
+        exitRules: parsed.exitRules || parsed.exit_rules || '',
+        riskRules: parsed.riskRules || parsed.risk_rules || '',
+        status: 'generated',
+      } as any);
+      res.json(updated);
+    } catch (err: any) {
+      res.status(500).json({ error: err.message });
+    }
+  });
+
+  // ── Bot Deployments ───────────────────────────────────────────────────────
+  app.get("/api/bot-deployments", async (req, res) => {
+    const userId = req.user?.id || 1;
+    const deployments = await storage.getBotDeployments(userId);
+    res.json(deployments);
+  });
+
+  app.post("/api/bot-deployments", async (req, res) => {
+    const userId = req.user?.id || 1;
+    const deployment = await storage.createBotDeployment({ ...req.body, userId });
+    res.status(201).json(deployment);
+  });
+
+  app.put("/api/bot-deployments/:id", async (req, res) => {
+    const userId = req.user?.id || 1;
+    const dep = await storage.getBotDeployment(req.params.id);
+    if (!dep || dep.userId !== userId) return res.status(404).json({ error: "Not found" });
+    const updated = await storage.updateBotDeployment(req.params.id, req.body);
+    res.json(updated);
+  });
+
+  app.delete("/api/bot-deployments/:id", async (req, res) => {
+    const userId = req.user?.id || 1;
+    const dep = await storage.getBotDeployment(req.params.id);
+    if (!dep || dep.userId !== userId) return res.status(404).json({ error: "Not found" });
+    await storage.deleteBotDeployment(req.params.id);
+    res.json({ ok: true });
+  });
+
+  // ── Fiverr Gigs ───────────────────────────────────────────────────────────
+  app.get("/api/fiverr-gigs", async (req, res) => {
+    const userId = req.user?.id || 1;
+    const gigs = await storage.getFiverrGigs(userId);
+    res.json(gigs);
+  });
+
+  app.post("/api/fiverr-gigs", async (req, res) => {
+    const userId = req.user?.id || 1;
+    const gig = await storage.createFiverrGig({ ...req.body, userId });
+    res.status(201).json(gig);
+  });
+
+  app.get("/api/fiverr-gigs/:id", async (req, res) => {
+    const userId = req.user?.id || 1;
+    const gig = await storage.getFiverrGig(req.params.id);
+    if (!gig || gig.userId !== userId) return res.status(404).json({ error: "Not found" });
+    res.json(gig);
+  });
+
+  app.put("/api/fiverr-gigs/:id", async (req, res) => {
+    const userId = req.user?.id || 1;
+    const gig = await storage.getFiverrGig(req.params.id);
+    if (!gig || gig.userId !== userId) return res.status(404).json({ error: "Not found" });
+    const updated = await storage.updateFiverrGig(req.params.id, req.body);
+    res.json(updated);
+  });
+
+  app.delete("/api/fiverr-gigs/:id", async (req, res) => {
+    const userId = req.user?.id || 1;
+    const gig = await storage.getFiverrGig(req.params.id);
+    if (!gig || gig.userId !== userId) return res.status(404).json({ error: "Not found" });
+    await storage.deleteFiverrGig(req.params.id);
+    res.json({ ok: true });
+  });
+
+  // ── Fiverr Orders ─────────────────────────────────────────────────────────
+  app.get("/api/fiverr-orders", async (req, res) => {
+    const userId = req.user?.id || 1;
+    const orders = await storage.getFiverrOrders(userId);
+    res.json(orders);
+  });
+
+  app.post("/api/fiverr-orders", async (req, res) => {
+    const userId = req.user?.id || 1;
+    const order = await storage.createFiverrOrder({ ...req.body, userId });
+    res.status(201).json(order);
+  });
+
+  app.put("/api/fiverr-orders/:id", async (req, res) => {
+    const userId = req.user?.id || 1;
+    const order = await storage.getFiverrOrder(req.params.id);
+    if (!order || order.userId !== userId) return res.status(404).json({ error: "Not found" });
+    const updated = await storage.updateFiverrOrder(req.params.id, req.body);
+    res.json(updated);
+  });
+
+  app.post("/api/fiverr-orders/:id/generate", async (req, res) => {
+    const userId = req.user?.id || 1;
+    const order = await storage.getFiverrOrder(req.params.id);
+    if (!order || order.userId !== userId) return res.status(404).json({ error: "Not found" });
+    const gig = await storage.getFiverrGig(order.gigId);
+    try {
+      const { runAgentChat } = await import("./ai");
+      const systemPrompt = `You are a professional freelancer completing a Fiverr order. Generate a high-quality deliverable draft based on the gig description and buyer requirements. Be thorough and professional.`;
+      const prompt = `Gig: ${gig?.title || 'Freelance work'}\nGig Description: ${gig?.description || 'N/A'}\nBuyer Requirements: ${order.requirements || 'No specific requirements'}\n\nGenerate the deliverable.`;
+      const { reply } = await runAgentChat(gig?.aiModel || "claude-sonnet", systemPrompt, [], prompt);
+      const updated = await storage.updateFiverrOrder(req.params.id, { aiDraft: reply, status: 'draft_ready' } as any);
+      res.json(updated);
+    } catch (err: any) {
+      res.status(500).json({ error: err.message });
+    }
+  });
+
+  // ── Jarvis Voice ──────────────────────────────────────────────────────────
+  app.post("/api/jarvis/tts", async (_req, res) => {
+    res.json({ audioUrl: null, message: "TTS placeholder — integration pending" });
+  });
+
+  app.post("/api/jarvis/stt", async (_req, res) => {
+    res.json({ transcript: null, message: "STT placeholder — integration pending" });
+  });
+
+  app.get("/api/jarvis/voices", async (_req, res) => {
+    res.json([
+      { id: "jarvis", name: "Jarvis", description: "Male, deep", isDefault: true },
+      { id: "nova", name: "Nova", description: "Female, professional" },
+      { id: "echo", name: "Echo", description: "Male, casual" },
+      { id: "sage", name: "Sage", description: "Female, warm" },
+      { id: "atlas", name: "Atlas", description: "Male, authoritative" },
+    ]);
+  });
+
+  // ── Generated Apps ────────────────────────────────────────────────────────
+  app.get("/api/generated-apps", async (req, res) => {
+    const userId = req.user?.id || 1;
+    const apps = await storage.getGeneratedApps(userId);
+    res.json(apps);
+  });
+
+  app.post("/api/generated-apps", async (req, res) => {
+    const userId = req.user?.id || 1;
+    const app_ = await storage.createGeneratedApp({ ...req.body, userId });
+    res.status(201).json(app_);
+  });
+
+  app.get("/api/generated-apps/:id", async (req, res) => {
+    const userId = req.user?.id || 1;
+    const app_ = await storage.getGeneratedApp(req.params.id);
+    if (!app_ || app_.userId !== userId) return res.status(404).json({ error: "Not found" });
+    res.json(app_);
+  });
+
+  app.put("/api/generated-apps/:id", async (req, res) => {
+    const userId = req.user?.id || 1;
+    const app_ = await storage.getGeneratedApp(req.params.id);
+    if (!app_ || app_.userId !== userId) return res.status(404).json({ error: "Not found" });
+    const updated = await storage.updateGeneratedApp(req.params.id, req.body);
+    res.json(updated);
+  });
+
+  app.delete("/api/generated-apps/:id", async (req, res) => {
+    const userId = req.user?.id || 1;
+    const app_ = await storage.getGeneratedApp(req.params.id);
+    if (!app_ || app_.userId !== userId) return res.status(404).json({ error: "Not found" });
+    await storage.deleteGeneratedApp(req.params.id);
+    res.json({ ok: true });
+  });
+
+  app.post("/api/generated-apps/:id/generate", async (req, res) => {
+    const userId = req.user?.id || 1;
+    const app_ = await storage.getGeneratedApp(req.params.id);
+    if (!app_ || app_.userId !== userId) return res.status(404).json({ error: "Not found" });
+    try {
+      const { runAgentChat } = await import("./ai");
+      const systemPrompt = `You are an expert app developer. Generate complete, working code for the described application. Return clean, well-structured code with comments. Use the specified framework.`;
+      const prompt = `App: ${app_.name}\nDescription: ${app_.description || 'No description'}\nFramework: ${app_.framework}\nApp Type: ${app_.appType}\n\nGenerate the complete app code.`;
+      const { reply } = await runAgentChat("claude-sonnet", systemPrompt, [], prompt);
+      const updated = await storage.updateGeneratedApp(req.params.id, { generatedCode: reply, status: 'generated' } as any);
+      res.json(updated);
+    } catch (err: any) {
+      res.status(500).json({ error: err.message });
+    }
+  });
+
+  // ── White Label Configs ───────────────────────────────────────────────────
+  app.get("/api/white-label-configs", async (req, res) => {
+    const userId = req.user?.id || 1;
+    const configs = await storage.getWhiteLabelConfigs(userId);
+    res.json(configs);
+  });
+
+  app.post("/api/white-label-configs", async (req, res) => {
+    const userId = req.user?.id || 1;
+    const config = await storage.createWhiteLabelConfig({ ...req.body, userId });
+    res.status(201).json(config);
+  });
+
+  app.get("/api/white-label-configs/:id", async (req, res) => {
+    const userId = req.user?.id || 1;
+    const config = await storage.getWhiteLabelConfig(req.params.id);
+    if (!config || config.userId !== userId) return res.status(404).json({ error: "Not found" });
+    res.json(config);
+  });
+
+  app.put("/api/white-label-configs/:id", async (req, res) => {
+    const userId = req.user?.id || 1;
+    const config = await storage.getWhiteLabelConfig(req.params.id);
+    if (!config || config.userId !== userId) return res.status(404).json({ error: "Not found" });
+    const updated = await storage.updateWhiteLabelConfig(req.params.id, req.body);
+    res.json(updated);
+  });
+
+  app.delete("/api/white-label-configs/:id", async (req, res) => {
+    const userId = req.user?.id || 1;
+    const config = await storage.getWhiteLabelConfig(req.params.id);
+    if (!config || config.userId !== userId) return res.status(404).json({ error: "Not found" });
+    await storage.deleteWhiteLabelConfig(req.params.id);
+    res.json({ ok: true });
+  });
+
+  // ── Prop Accounts ─────────────────────────────────────────────────────────
+  app.get("/api/prop-accounts", async (req, res) => {
+    const userId = req.user?.id || 1;
+    const accounts = await storage.getPropAccounts(userId);
+    res.json(accounts);
+  });
+
+  app.post("/api/prop-accounts", async (req, res) => {
+    const userId = req.user?.id || 1;
+    const account = await storage.createPropAccount({ ...req.body, userId });
+    res.status(201).json(account);
+  });
+
+  app.get("/api/prop-accounts/:id", async (req, res) => {
+    const userId = req.user?.id || 1;
+    const account = await storage.getPropAccount(req.params.id);
+    if (!account || account.userId !== userId) return res.status(404).json({ error: "Not found" });
+    res.json(account);
+  });
+
+  app.put("/api/prop-accounts/:id", async (req, res) => {
+    const userId = req.user?.id || 1;
+    const account = await storage.getPropAccount(req.params.id);
+    if (!account || account.userId !== userId) return res.status(404).json({ error: "Not found" });
+    const updated = await storage.updatePropAccount(req.params.id, req.body);
+    res.json(updated);
+  });
+
+  app.delete("/api/prop-accounts/:id", async (req, res) => {
+    const userId = req.user?.id || 1;
+    const account = await storage.getPropAccount(req.params.id);
+    if (!account || account.userId !== userId) return res.status(404).json({ error: "Not found" });
+    await storage.deletePropAccount(req.params.id);
+    res.json({ ok: true });
+  });
+
   return httpServer;
 }

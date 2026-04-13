@@ -372,6 +372,133 @@ sqlite.exec(`
     account_info TEXT,
     created_at TEXT DEFAULT (datetime('now'))
   );
+
+  CREATE TABLE IF NOT EXISTS account_stacks (
+    id TEXT PRIMARY KEY,
+    user_id INTEGER NOT NULL,
+    name TEXT NOT NULL,
+    leader_connection_id TEXT NOT NULL,
+    status TEXT DEFAULT 'active',
+    copy_mode TEXT DEFAULT 'mirror',
+    size_multiplier REAL DEFAULT 1.0,
+    created_at TEXT DEFAULT (datetime('now'))
+  );
+
+  CREATE TABLE IF NOT EXISTS account_stack_followers (
+    id TEXT PRIMARY KEY,
+    stack_id TEXT NOT NULL,
+    connection_id TEXT NOT NULL,
+    size_multiplier REAL DEFAULT 1.0,
+    is_active INTEGER DEFAULT 1,
+    created_at TEXT DEFAULT (datetime('now'))
+  );
+
+  CREATE TABLE IF NOT EXISTS trading_bots (
+    id TEXT PRIMARY KEY,
+    user_id INTEGER NOT NULL,
+    name TEXT NOT NULL,
+    description TEXT,
+    strategy_type TEXT NOT NULL DEFAULT 'custom',
+    model TEXT DEFAULT 'claude-sonnet',
+    system_prompt TEXT,
+    indicators TEXT,
+    entry_rules TEXT,
+    exit_rules TEXT,
+    risk_rules TEXT,
+    timeframe TEXT DEFAULT '5m',
+    symbols TEXT DEFAULT '["ES","NQ"]',
+    status TEXT DEFAULT 'draft',
+    backtest_results TEXT,
+    created_at TEXT DEFAULT (datetime('now')),
+    updated_at TEXT DEFAULT (datetime('now'))
+  );
+
+  CREATE TABLE IF NOT EXISTS bot_deployments (
+    id TEXT PRIMARY KEY,
+    user_id INTEGER NOT NULL,
+    bot_id TEXT NOT NULL,
+    connection_id TEXT NOT NULL,
+    status TEXT DEFAULT 'stopped',
+    max_position_size INTEGER DEFAULT 1,
+    max_daily_loss REAL DEFAULT 500,
+    max_trades_per_day INTEGER DEFAULT 10,
+    last_signal_at TEXT,
+    total_trades INTEGER DEFAULT 0,
+    total_pnl REAL DEFAULT 0,
+    created_at TEXT DEFAULT (datetime('now'))
+  );
+
+  CREATE TABLE IF NOT EXISTS fiverr_gigs (
+    id TEXT PRIMARY KEY,
+    user_id INTEGER NOT NULL,
+    title TEXT NOT NULL,
+    category TEXT,
+    description TEXT,
+    price_tiers TEXT,
+    auto_response TEXT,
+    ai_model TEXT DEFAULT 'claude-sonnet',
+    is_active INTEGER DEFAULT 1,
+    total_orders INTEGER DEFAULT 0,
+    total_revenue REAL DEFAULT 0,
+    created_at TEXT DEFAULT (datetime('now'))
+  );
+
+  CREATE TABLE IF NOT EXISTS fiverr_orders (
+    id TEXT PRIMARY KEY,
+    gig_id TEXT NOT NULL,
+    user_id INTEGER NOT NULL,
+    buyer_name TEXT,
+    requirements TEXT,
+    ai_draft TEXT,
+    status TEXT DEFAULT 'pending',
+    amount REAL DEFAULT 0,
+    created_at TEXT DEFAULT (datetime('now')),
+    completed_at TEXT
+  );
+
+  CREATE TABLE IF NOT EXISTS generated_apps (
+    id TEXT PRIMARY KEY,
+    user_id INTEGER NOT NULL,
+    name TEXT NOT NULL,
+    description TEXT,
+    app_type TEXT DEFAULT 'web',
+    framework TEXT DEFAULT 'react',
+    generated_code TEXT,
+    preview_url TEXT,
+    status TEXT DEFAULT 'draft',
+    created_at TEXT DEFAULT (datetime('now'))
+  );
+
+  CREATE TABLE IF NOT EXISTS white_label_configs (
+    id TEXT PRIMARY KEY,
+    user_id INTEGER NOT NULL,
+    brand_name TEXT NOT NULL,
+    logo_url TEXT,
+    primary_color TEXT DEFAULT '#6366f1',
+    secondary_color TEXT DEFAULT '#8b5cf6',
+    custom_domain TEXT,
+    features TEXT,
+    max_users INTEGER DEFAULT 10,
+    status TEXT DEFAULT 'draft',
+    created_at TEXT DEFAULT (datetime('now'))
+  );
+
+  CREATE TABLE IF NOT EXISTS prop_accounts (
+    id TEXT PRIMARY KEY,
+    user_id INTEGER NOT NULL,
+    firm TEXT NOT NULL,
+    account_number TEXT,
+    account_size INTEGER,
+    phase TEXT DEFAULT 'evaluation',
+    profit_target REAL,
+    max_drawdown REAL,
+    daily_drawdown REAL,
+    current_balance REAL,
+    current_pnl REAL DEFAULT 0,
+    status TEXT DEFAULT 'active',
+    credentials TEXT,
+    created_at TEXT DEFAULT (datetime('now'))
+  );
 `);
 
 // Safe ALTER TABLE for existing DBs that lack new columns
@@ -473,6 +600,140 @@ export interface BrokerConnection {
   lastSyncAt: string | null;
   accountId: string | null;
   accountInfo: string | null;
+  createdAt: string;
+}
+
+// ── Account Stacks types ──────────────────────────────────────────────────────
+export interface AccountStack {
+  id: string;
+  userId: number;
+  name: string;
+  leaderConnectionId: string;
+  status: string;
+  copyMode: string;
+  sizeMultiplier: number;
+  createdAt: string;
+}
+
+export interface AccountStackFollower {
+  id: string;
+  stackId: string;
+  connectionId: string;
+  sizeMultiplier: number;
+  isActive: number;
+  createdAt: string;
+}
+
+// ── Trading Bot types ──────────────────────────────────────────────────────────
+export interface TradingBot {
+  id: string;
+  userId: number;
+  name: string;
+  description: string | null;
+  strategyType: string;
+  model: string;
+  systemPrompt: string | null;
+  indicators: string | null;
+  entryRules: string | null;
+  exitRules: string | null;
+  riskRules: string | null;
+  timeframe: string;
+  symbols: string;
+  status: string;
+  backtestResults: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+// ── Bot Deployment types ──────────────────────────────────────────────────────
+export interface BotDeployment {
+  id: string;
+  userId: number;
+  botId: string;
+  connectionId: string;
+  status: string;
+  maxPositionSize: number;
+  maxDailyLoss: number;
+  maxTradesPerDay: number;
+  lastSignalAt: string | null;
+  totalTrades: number;
+  totalPnl: number;
+  createdAt: string;
+}
+
+// ── Fiverr types ──────────────────────────────────────────────────────────────
+export interface FiverrGig {
+  id: string;
+  userId: number;
+  title: string;
+  category: string | null;
+  description: string | null;
+  priceTiers: string | null;
+  autoResponse: string | null;
+  aiModel: string;
+  isActive: number;
+  totalOrders: number;
+  totalRevenue: number;
+  createdAt: string;
+}
+
+export interface FiverrOrder {
+  id: string;
+  gigId: string;
+  userId: number;
+  buyerName: string | null;
+  requirements: string | null;
+  aiDraft: string | null;
+  status: string;
+  amount: number;
+  createdAt: string;
+  completedAt: string | null;
+}
+
+// ── Generated App types ──────────────────────────────────────────────────────
+export interface GeneratedApp {
+  id: string;
+  userId: number;
+  name: string;
+  description: string | null;
+  appType: string;
+  framework: string;
+  generatedCode: string | null;
+  previewUrl: string | null;
+  status: string;
+  createdAt: string;
+}
+
+// ── White Label types ──────────────────────────────────────────────────────────
+export interface WhiteLabelConfig {
+  id: string;
+  userId: number;
+  brandName: string;
+  logoUrl: string | null;
+  primaryColor: string;
+  secondaryColor: string;
+  customDomain: string | null;
+  features: string | null;
+  maxUsers: number;
+  status: string;
+  createdAt: string;
+}
+
+// ── Prop Account types ──────────────────────────────────────────────────────────
+export interface PropAccount {
+  id: string;
+  userId: number;
+  firm: string;
+  accountNumber: string | null;
+  accountSize: number | null;
+  phase: string;
+  profitTarget: number | null;
+  maxDrawdown: number | null;
+  dailyDrawdown: number | null;
+  currentBalance: number | null;
+  currentPnl: number;
+  status: string;
+  credentials: string | null;
   createdAt: string;
 }
 
@@ -634,6 +895,55 @@ export interface IStorage {
   getBrokerConnection(id: string): Promise<BrokerConnection | undefined>;
   updateBrokerConnection(id: string, data: Partial<Omit<BrokerConnection, 'id' | 'userId' | 'createdAt'>>): Promise<BrokerConnection | undefined>;
   deleteBrokerConnection(id: string): Promise<void>;
+  // Account Stacks
+  getAccountStacks(userId: number): Promise<AccountStack[]>;
+  getAccountStack(id: string): Promise<AccountStack | undefined>;
+  createAccountStack(data: { userId: number; name: string; leaderConnectionId: string; copyMode?: string; sizeMultiplier?: number }): Promise<AccountStack>;
+  deleteAccountStack(id: string): Promise<void>;
+  getStackFollowers(stackId: string): Promise<AccountStackFollower[]>;
+  addStackFollower(data: { stackId: string; connectionId: string; sizeMultiplier?: number }): Promise<AccountStackFollower>;
+  removeStackFollower(id: string): Promise<void>;
+  // Trading Bots
+  getTradingBots(userId: number): Promise<TradingBot[]>;
+  getTradingBot(id: string): Promise<TradingBot | undefined>;
+  createTradingBot(data: { userId: number; name: string; description?: string; strategyType?: string; model?: string; systemPrompt?: string; indicators?: string; entryRules?: string; exitRules?: string; riskRules?: string; timeframe?: string; symbols?: string; status?: string }): Promise<TradingBot>;
+  updateTradingBot(id: string, data: Partial<TradingBot>): Promise<TradingBot | undefined>;
+  deleteTradingBot(id: string): Promise<void>;
+  // Bot Deployments
+  getBotDeployments(userId: number): Promise<BotDeployment[]>;
+  getBotDeployment(id: string): Promise<BotDeployment | undefined>;
+  createBotDeployment(data: { userId: number; botId: string; connectionId: string; maxPositionSize?: number; maxDailyLoss?: number; maxTradesPerDay?: number }): Promise<BotDeployment>;
+  updateBotDeployment(id: string, data: Partial<BotDeployment>): Promise<BotDeployment | undefined>;
+  deleteBotDeployment(id: string): Promise<void>;
+  // Fiverr Gigs
+  getFiverrGigs(userId: number): Promise<FiverrGig[]>;
+  getFiverrGig(id: string): Promise<FiverrGig | undefined>;
+  createFiverrGig(data: { userId: number; title: string; category?: string; description?: string; priceTiers?: string; autoResponse?: string; aiModel?: string }): Promise<FiverrGig>;
+  updateFiverrGig(id: string, data: Partial<FiverrGig>): Promise<FiverrGig | undefined>;
+  deleteFiverrGig(id: string): Promise<void>;
+  // Fiverr Orders
+  getFiverrOrders(userId: number): Promise<FiverrOrder[]>;
+  getFiverrOrder(id: string): Promise<FiverrOrder | undefined>;
+  createFiverrOrder(data: { gigId: string; userId: number; buyerName?: string; requirements?: string; amount?: number }): Promise<FiverrOrder>;
+  updateFiverrOrder(id: string, data: Partial<FiverrOrder>): Promise<FiverrOrder | undefined>;
+  // Generated Apps
+  getGeneratedApps(userId: number): Promise<GeneratedApp[]>;
+  getGeneratedApp(id: string): Promise<GeneratedApp | undefined>;
+  createGeneratedApp(data: { userId: number; name: string; description?: string; appType?: string; framework?: string }): Promise<GeneratedApp>;
+  updateGeneratedApp(id: string, data: Partial<GeneratedApp>): Promise<GeneratedApp | undefined>;
+  deleteGeneratedApp(id: string): Promise<void>;
+  // White Label Configs
+  getWhiteLabelConfigs(userId: number): Promise<WhiteLabelConfig[]>;
+  getWhiteLabelConfig(id: string): Promise<WhiteLabelConfig | undefined>;
+  createWhiteLabelConfig(data: { userId: number; brandName: string; logoUrl?: string; primaryColor?: string; secondaryColor?: string; customDomain?: string; features?: string; maxUsers?: number }): Promise<WhiteLabelConfig>;
+  updateWhiteLabelConfig(id: string, data: Partial<WhiteLabelConfig>): Promise<WhiteLabelConfig | undefined>;
+  deleteWhiteLabelConfig(id: string): Promise<void>;
+  // Prop Accounts
+  getPropAccounts(userId: number): Promise<PropAccount[]>;
+  getPropAccount(id: string): Promise<PropAccount | undefined>;
+  createPropAccount(data: { userId: number; firm: string; accountNumber?: string; accountSize?: number; phase?: string; profitTarget?: number; maxDrawdown?: number; dailyDrawdown?: number; currentBalance?: number; credentials?: string }): Promise<PropAccount>;
+  updatePropAccount(id: string, data: Partial<PropAccount>): Promise<PropAccount | undefined>;
+  deletePropAccount(id: string): Promise<void>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -1640,6 +1950,508 @@ export class DatabaseStorage implements IStorage {
 
   async deleteBrokerConnection(id: string): Promise<void> {
     sqlite.prepare(`DELETE FROM broker_connections WHERE id = ?`).run(id);
+  }
+
+  // ── Account Stacks ────────────────────────────────────────────────────────
+  private _mapAccountStack(row: any): AccountStack {
+    return {
+      id: row.id,
+      userId: row.user_id,
+      name: row.name,
+      leaderConnectionId: row.leader_connection_id,
+      status: row.status,
+      copyMode: row.copy_mode,
+      sizeMultiplier: row.size_multiplier,
+      createdAt: row.created_at,
+    };
+  }
+
+  private _mapStackFollower(row: any): AccountStackFollower {
+    return {
+      id: row.id,
+      stackId: row.stack_id,
+      connectionId: row.connection_id,
+      sizeMultiplier: row.size_multiplier,
+      isActive: row.is_active,
+      createdAt: row.created_at,
+    };
+  }
+
+  async getAccountStacks(userId: number): Promise<AccountStack[]> {
+    const rows = sqlite.prepare('SELECT * FROM account_stacks WHERE user_id = ? ORDER BY created_at DESC').all(userId) as any[];
+    return rows.map(r => this._mapAccountStack(r));
+  }
+
+  async getAccountStack(id: string): Promise<AccountStack | undefined> {
+    const row = sqlite.prepare('SELECT * FROM account_stacks WHERE id = ?').get(id) as any;
+    if (!row) return undefined;
+    return this._mapAccountStack(row);
+  }
+
+  async createAccountStack(data: { userId: number; name: string; leaderConnectionId: string; copyMode?: string; sizeMultiplier?: number }): Promise<AccountStack> {
+    const { v4: uuidv4 } = await import('uuid');
+    const id = uuidv4();
+    sqlite.prepare(`
+      INSERT INTO account_stacks (id, user_id, name, leader_connection_id, copy_mode, size_multiplier)
+      VALUES (?, ?, ?, ?, ?, ?)
+    `).run(id, data.userId, data.name, data.leaderConnectionId, data.copyMode ?? 'mirror', data.sizeMultiplier ?? 1.0);
+    return this.getAccountStack(id) as Promise<AccountStack>;
+  }
+
+  async deleteAccountStack(id: string): Promise<void> {
+    sqlite.prepare('DELETE FROM account_stack_followers WHERE stack_id = ?').run(id);
+    sqlite.prepare('DELETE FROM account_stacks WHERE id = ?').run(id);
+  }
+
+  async getStackFollowers(stackId: string): Promise<AccountStackFollower[]> {
+    const rows = sqlite.prepare('SELECT * FROM account_stack_followers WHERE stack_id = ? ORDER BY created_at DESC').all(stackId) as any[];
+    return rows.map(r => this._mapStackFollower(r));
+  }
+
+  async addStackFollower(data: { stackId: string; connectionId: string; sizeMultiplier?: number }): Promise<AccountStackFollower> {
+    const { v4: uuidv4 } = await import('uuid');
+    const id = uuidv4();
+    sqlite.prepare(`
+      INSERT INTO account_stack_followers (id, stack_id, connection_id, size_multiplier)
+      VALUES (?, ?, ?, ?)
+    `).run(id, data.stackId, data.connectionId, data.sizeMultiplier ?? 1.0);
+    const row = sqlite.prepare('SELECT * FROM account_stack_followers WHERE id = ?').get(id) as any;
+    return this._mapStackFollower(row);
+  }
+
+  async removeStackFollower(id: string): Promise<void> {
+    sqlite.prepare('DELETE FROM account_stack_followers WHERE id = ?').run(id);
+  }
+
+  // ── Trading Bots ──────────────────────────────────────────────────────────
+  private _mapTradingBot(row: any): TradingBot {
+    return {
+      id: row.id,
+      userId: row.user_id,
+      name: row.name,
+      description: row.description,
+      strategyType: row.strategy_type,
+      model: row.model,
+      systemPrompt: row.system_prompt,
+      indicators: row.indicators,
+      entryRules: row.entry_rules,
+      exitRules: row.exit_rules,
+      riskRules: row.risk_rules,
+      timeframe: row.timeframe,
+      symbols: row.symbols,
+      status: row.status,
+      backtestResults: row.backtest_results,
+      createdAt: row.created_at,
+      updatedAt: row.updated_at,
+    };
+  }
+
+  async getTradingBots(userId: number): Promise<TradingBot[]> {
+    const rows = sqlite.prepare('SELECT * FROM trading_bots WHERE user_id = ? ORDER BY created_at DESC').all(userId) as any[];
+    return rows.map(r => this._mapTradingBot(r));
+  }
+
+  async getTradingBot(id: string): Promise<TradingBot | undefined> {
+    const row = sqlite.prepare('SELECT * FROM trading_bots WHERE id = ?').get(id) as any;
+    if (!row) return undefined;
+    return this._mapTradingBot(row);
+  }
+
+  async createTradingBot(data: { userId: number; name: string; description?: string; strategyType?: string; model?: string; systemPrompt?: string; indicators?: string; entryRules?: string; exitRules?: string; riskRules?: string; timeframe?: string; symbols?: string; status?: string }): Promise<TradingBot> {
+    const { v4: uuidv4 } = await import('uuid');
+    const id = uuidv4();
+    sqlite.prepare(`
+      INSERT INTO trading_bots (id, user_id, name, description, strategy_type, model, system_prompt, indicators, entry_rules, exit_rules, risk_rules, timeframe, symbols, status)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    `).run(
+      id, data.userId, data.name, data.description ?? null,
+      data.strategyType ?? 'custom', data.model ?? 'claude-sonnet',
+      data.systemPrompt ?? null, data.indicators ?? null,
+      data.entryRules ?? null, data.exitRules ?? null, data.riskRules ?? null,
+      data.timeframe ?? '5m', data.symbols ?? '["ES","NQ"]', data.status ?? 'draft'
+    );
+    return this.getTradingBot(id) as Promise<TradingBot>;
+  }
+
+  async updateTradingBot(id: string, data: Partial<TradingBot>): Promise<TradingBot | undefined> {
+    const now = new Date().toISOString();
+    const colMap: Record<string, string> = {
+      name: 'name', description: 'description', strategyType: 'strategy_type',
+      model: 'model', systemPrompt: 'system_prompt', indicators: 'indicators',
+      entryRules: 'entry_rules', exitRules: 'exit_rules', riskRules: 'risk_rules',
+      timeframe: 'timeframe', symbols: 'symbols', status: 'status',
+      backtestResults: 'backtest_results',
+    };
+    const fields: string[] = ['updated_at = ?'];
+    const values: any[] = [now];
+    for (const [key, col] of Object.entries(colMap)) {
+      if (key in data) { fields.push(`${col} = ?`); values.push((data as any)[key]); }
+    }
+    values.push(id);
+    sqlite.prepare(`UPDATE trading_bots SET ${fields.join(', ')} WHERE id = ?`).run(...values);
+    return this.getTradingBot(id);
+  }
+
+  async deleteTradingBot(id: string): Promise<void> {
+    sqlite.prepare('DELETE FROM trading_bots WHERE id = ?').run(id);
+  }
+
+  // ── Bot Deployments ───────────────────────────────────────────────────────
+  private _mapBotDeployment(row: any): BotDeployment {
+    return {
+      id: row.id,
+      userId: row.user_id,
+      botId: row.bot_id,
+      connectionId: row.connection_id,
+      status: row.status,
+      maxPositionSize: row.max_position_size,
+      maxDailyLoss: row.max_daily_loss,
+      maxTradesPerDay: row.max_trades_per_day,
+      lastSignalAt: row.last_signal_at,
+      totalTrades: row.total_trades,
+      totalPnl: row.total_pnl,
+      createdAt: row.created_at,
+    };
+  }
+
+  async getBotDeployments(userId: number): Promise<BotDeployment[]> {
+    const rows = sqlite.prepare('SELECT * FROM bot_deployments WHERE user_id = ? ORDER BY created_at DESC').all(userId) as any[];
+    return rows.map(r => this._mapBotDeployment(r));
+  }
+
+  async getBotDeployment(id: string): Promise<BotDeployment | undefined> {
+    const row = sqlite.prepare('SELECT * FROM bot_deployments WHERE id = ?').get(id) as any;
+    if (!row) return undefined;
+    return this._mapBotDeployment(row);
+  }
+
+  async createBotDeployment(data: { userId: number; botId: string; connectionId: string; maxPositionSize?: number; maxDailyLoss?: number; maxTradesPerDay?: number }): Promise<BotDeployment> {
+    const { v4: uuidv4 } = await import('uuid');
+    const id = uuidv4();
+    sqlite.prepare(`
+      INSERT INTO bot_deployments (id, user_id, bot_id, connection_id, max_position_size, max_daily_loss, max_trades_per_day)
+      VALUES (?, ?, ?, ?, ?, ?, ?)
+    `).run(id, data.userId, data.botId, data.connectionId, data.maxPositionSize ?? 1, data.maxDailyLoss ?? 500, data.maxTradesPerDay ?? 10);
+    return this.getBotDeployment(id) as Promise<BotDeployment>;
+  }
+
+  async updateBotDeployment(id: string, data: Partial<BotDeployment>): Promise<BotDeployment | undefined> {
+    const colMap: Record<string, string> = {
+      status: 'status', maxPositionSize: 'max_position_size', maxDailyLoss: 'max_daily_loss',
+      maxTradesPerDay: 'max_trades_per_day', lastSignalAt: 'last_signal_at',
+      totalTrades: 'total_trades', totalPnl: 'total_pnl',
+    };
+    const fields: string[] = [];
+    const values: any[] = [];
+    for (const [key, col] of Object.entries(colMap)) {
+      if (key in data) { fields.push(`${col} = ?`); values.push((data as any)[key]); }
+    }
+    if (fields.length === 0) return this.getBotDeployment(id);
+    values.push(id);
+    sqlite.prepare(`UPDATE bot_deployments SET ${fields.join(', ')} WHERE id = ?`).run(...values);
+    return this.getBotDeployment(id);
+  }
+
+  async deleteBotDeployment(id: string): Promise<void> {
+    sqlite.prepare('DELETE FROM bot_deployments WHERE id = ?').run(id);
+  }
+
+  // ── Fiverr Gigs ───────────────────────────────────────────────────────────
+  private _mapFiverrGig(row: any): FiverrGig {
+    return {
+      id: row.id,
+      userId: row.user_id,
+      title: row.title,
+      category: row.category,
+      description: row.description,
+      priceTiers: row.price_tiers,
+      autoResponse: row.auto_response,
+      aiModel: row.ai_model,
+      isActive: row.is_active,
+      totalOrders: row.total_orders,
+      totalRevenue: row.total_revenue,
+      createdAt: row.created_at,
+    };
+  }
+
+  async getFiverrGigs(userId: number): Promise<FiverrGig[]> {
+    const rows = sqlite.prepare('SELECT * FROM fiverr_gigs WHERE user_id = ? ORDER BY created_at DESC').all(userId) as any[];
+    return rows.map(r => this._mapFiverrGig(r));
+  }
+
+  async getFiverrGig(id: string): Promise<FiverrGig | undefined> {
+    const row = sqlite.prepare('SELECT * FROM fiverr_gigs WHERE id = ?').get(id) as any;
+    if (!row) return undefined;
+    return this._mapFiverrGig(row);
+  }
+
+  async createFiverrGig(data: { userId: number; title: string; category?: string; description?: string; priceTiers?: string; autoResponse?: string; aiModel?: string }): Promise<FiverrGig> {
+    const { v4: uuidv4 } = await import('uuid');
+    const id = uuidv4();
+    sqlite.prepare(`
+      INSERT INTO fiverr_gigs (id, user_id, title, category, description, price_tiers, auto_response, ai_model)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+    `).run(id, data.userId, data.title, data.category ?? null, data.description ?? null, data.priceTiers ?? null, data.autoResponse ?? null, data.aiModel ?? 'claude-sonnet');
+    return this.getFiverrGig(id) as Promise<FiverrGig>;
+  }
+
+  async updateFiverrGig(id: string, data: Partial<FiverrGig>): Promise<FiverrGig | undefined> {
+    const colMap: Record<string, string> = {
+      title: 'title', category: 'category', description: 'description',
+      priceTiers: 'price_tiers', autoResponse: 'auto_response', aiModel: 'ai_model',
+      isActive: 'is_active', totalOrders: 'total_orders', totalRevenue: 'total_revenue',
+    };
+    const fields: string[] = [];
+    const values: any[] = [];
+    for (const [key, col] of Object.entries(colMap)) {
+      if (key in data) { fields.push(`${col} = ?`); values.push((data as any)[key]); }
+    }
+    if (fields.length === 0) return this.getFiverrGig(id);
+    values.push(id);
+    sqlite.prepare(`UPDATE fiverr_gigs SET ${fields.join(', ')} WHERE id = ?`).run(...values);
+    return this.getFiverrGig(id);
+  }
+
+  async deleteFiverrGig(id: string): Promise<void> {
+    sqlite.prepare('DELETE FROM fiverr_gigs WHERE id = ?').run(id);
+  }
+
+  // ── Fiverr Orders ─────────────────────────────────────────────────────────
+  private _mapFiverrOrder(row: any): FiverrOrder {
+    return {
+      id: row.id,
+      gigId: row.gig_id,
+      userId: row.user_id,
+      buyerName: row.buyer_name,
+      requirements: row.requirements,
+      aiDraft: row.ai_draft,
+      status: row.status,
+      amount: row.amount,
+      createdAt: row.created_at,
+      completedAt: row.completed_at,
+    };
+  }
+
+  async getFiverrOrders(userId: number): Promise<FiverrOrder[]> {
+    const rows = sqlite.prepare('SELECT * FROM fiverr_orders WHERE user_id = ? ORDER BY created_at DESC').all(userId) as any[];
+    return rows.map(r => this._mapFiverrOrder(r));
+  }
+
+  async getFiverrOrder(id: string): Promise<FiverrOrder | undefined> {
+    const row = sqlite.prepare('SELECT * FROM fiverr_orders WHERE id = ?').get(id) as any;
+    if (!row) return undefined;
+    return this._mapFiverrOrder(row);
+  }
+
+  async createFiverrOrder(data: { gigId: string; userId: number; buyerName?: string; requirements?: string; amount?: number }): Promise<FiverrOrder> {
+    const { v4: uuidv4 } = await import('uuid');
+    const id = uuidv4();
+    sqlite.prepare(`
+      INSERT INTO fiverr_orders (id, gig_id, user_id, buyer_name, requirements, amount)
+      VALUES (?, ?, ?, ?, ?, ?)
+    `).run(id, data.gigId, data.userId, data.buyerName ?? null, data.requirements ?? null, data.amount ?? 0);
+    return this.getFiverrOrder(id) as Promise<FiverrOrder>;
+  }
+
+  async updateFiverrOrder(id: string, data: Partial<FiverrOrder>): Promise<FiverrOrder | undefined> {
+    const colMap: Record<string, string> = {
+      buyerName: 'buyer_name', requirements: 'requirements', aiDraft: 'ai_draft',
+      status: 'status', amount: 'amount', completedAt: 'completed_at',
+    };
+    const fields: string[] = [];
+    const values: any[] = [];
+    for (const [key, col] of Object.entries(colMap)) {
+      if (key in data) { fields.push(`${col} = ?`); values.push((data as any)[key]); }
+    }
+    if (fields.length === 0) return this.getFiverrOrder(id);
+    values.push(id);
+    sqlite.prepare(`UPDATE fiverr_orders SET ${fields.join(', ')} WHERE id = ?`).run(...values);
+    return this.getFiverrOrder(id);
+  }
+
+  // ── Generated Apps ────────────────────────────────────────────────────────
+  private _mapGeneratedApp(row: any): GeneratedApp {
+    return {
+      id: row.id,
+      userId: row.user_id,
+      name: row.name,
+      description: row.description,
+      appType: row.app_type,
+      framework: row.framework,
+      generatedCode: row.generated_code,
+      previewUrl: row.preview_url,
+      status: row.status,
+      createdAt: row.created_at,
+    };
+  }
+
+  async getGeneratedApps(userId: number): Promise<GeneratedApp[]> {
+    const rows = sqlite.prepare('SELECT * FROM generated_apps WHERE user_id = ? ORDER BY created_at DESC').all(userId) as any[];
+    return rows.map(r => this._mapGeneratedApp(r));
+  }
+
+  async getGeneratedApp(id: string): Promise<GeneratedApp | undefined> {
+    const row = sqlite.prepare('SELECT * FROM generated_apps WHERE id = ?').get(id) as any;
+    if (!row) return undefined;
+    return this._mapGeneratedApp(row);
+  }
+
+  async createGeneratedApp(data: { userId: number; name: string; description?: string; appType?: string; framework?: string }): Promise<GeneratedApp> {
+    const { v4: uuidv4 } = await import('uuid');
+    const id = uuidv4();
+    sqlite.prepare(`
+      INSERT INTO generated_apps (id, user_id, name, description, app_type, framework)
+      VALUES (?, ?, ?, ?, ?, ?)
+    `).run(id, data.userId, data.name, data.description ?? null, data.appType ?? 'web', data.framework ?? 'react');
+    return this.getGeneratedApp(id) as Promise<GeneratedApp>;
+  }
+
+  async updateGeneratedApp(id: string, data: Partial<GeneratedApp>): Promise<GeneratedApp | undefined> {
+    const colMap: Record<string, string> = {
+      name: 'name', description: 'description', appType: 'app_type',
+      framework: 'framework', generatedCode: 'generated_code',
+      previewUrl: 'preview_url', status: 'status',
+    };
+    const fields: string[] = [];
+    const values: any[] = [];
+    for (const [key, col] of Object.entries(colMap)) {
+      if (key in data) { fields.push(`${col} = ?`); values.push((data as any)[key]); }
+    }
+    if (fields.length === 0) return this.getGeneratedApp(id);
+    values.push(id);
+    sqlite.prepare(`UPDATE generated_apps SET ${fields.join(', ')} WHERE id = ?`).run(...values);
+    return this.getGeneratedApp(id);
+  }
+
+  async deleteGeneratedApp(id: string): Promise<void> {
+    sqlite.prepare('DELETE FROM generated_apps WHERE id = ?').run(id);
+  }
+
+  // ── White Label Configs ───────────────────────────────────────────────────
+  private _mapWhiteLabelConfig(row: any): WhiteLabelConfig {
+    return {
+      id: row.id,
+      userId: row.user_id,
+      brandName: row.brand_name,
+      logoUrl: row.logo_url,
+      primaryColor: row.primary_color,
+      secondaryColor: row.secondary_color,
+      customDomain: row.custom_domain,
+      features: row.features,
+      maxUsers: row.max_users,
+      status: row.status,
+      createdAt: row.created_at,
+    };
+  }
+
+  async getWhiteLabelConfigs(userId: number): Promise<WhiteLabelConfig[]> {
+    const rows = sqlite.prepare('SELECT * FROM white_label_configs WHERE user_id = ? ORDER BY created_at DESC').all(userId) as any[];
+    return rows.map(r => this._mapWhiteLabelConfig(r));
+  }
+
+  async getWhiteLabelConfig(id: string): Promise<WhiteLabelConfig | undefined> {
+    const row = sqlite.prepare('SELECT * FROM white_label_configs WHERE id = ?').get(id) as any;
+    if (!row) return undefined;
+    return this._mapWhiteLabelConfig(row);
+  }
+
+  async createWhiteLabelConfig(data: { userId: number; brandName: string; logoUrl?: string; primaryColor?: string; secondaryColor?: string; customDomain?: string; features?: string; maxUsers?: number }): Promise<WhiteLabelConfig> {
+    const { v4: uuidv4 } = await import('uuid');
+    const id = uuidv4();
+    sqlite.prepare(`
+      INSERT INTO white_label_configs (id, user_id, brand_name, logo_url, primary_color, secondary_color, custom_domain, features, max_users)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+    `).run(id, data.userId, data.brandName, data.logoUrl ?? null, data.primaryColor ?? '#6366f1', data.secondaryColor ?? '#8b5cf6', data.customDomain ?? null, data.features ?? null, data.maxUsers ?? 10);
+    return this.getWhiteLabelConfig(id) as Promise<WhiteLabelConfig>;
+  }
+
+  async updateWhiteLabelConfig(id: string, data: Partial<WhiteLabelConfig>): Promise<WhiteLabelConfig | undefined> {
+    const colMap: Record<string, string> = {
+      brandName: 'brand_name', logoUrl: 'logo_url', primaryColor: 'primary_color',
+      secondaryColor: 'secondary_color', customDomain: 'custom_domain',
+      features: 'features', maxUsers: 'max_users', status: 'status',
+    };
+    const fields: string[] = [];
+    const values: any[] = [];
+    for (const [key, col] of Object.entries(colMap)) {
+      if (key in data) { fields.push(`${col} = ?`); values.push((data as any)[key]); }
+    }
+    if (fields.length === 0) return this.getWhiteLabelConfig(id);
+    values.push(id);
+    sqlite.prepare(`UPDATE white_label_configs SET ${fields.join(', ')} WHERE id = ?`).run(...values);
+    return this.getWhiteLabelConfig(id);
+  }
+
+  async deleteWhiteLabelConfig(id: string): Promise<void> {
+    sqlite.prepare('DELETE FROM white_label_configs WHERE id = ?').run(id);
+  }
+
+  // ── Prop Accounts ─────────────────────────────────────────────────────────
+  private _mapPropAccount(row: any): PropAccount {
+    return {
+      id: row.id,
+      userId: row.user_id,
+      firm: row.firm,
+      accountNumber: row.account_number,
+      accountSize: row.account_size,
+      phase: row.phase,
+      profitTarget: row.profit_target,
+      maxDrawdown: row.max_drawdown,
+      dailyDrawdown: row.daily_drawdown,
+      currentBalance: row.current_balance,
+      currentPnl: row.current_pnl,
+      status: row.status,
+      credentials: row.credentials,
+      createdAt: row.created_at,
+    };
+  }
+
+  async getPropAccounts(userId: number): Promise<PropAccount[]> {
+    const rows = sqlite.prepare('SELECT * FROM prop_accounts WHERE user_id = ? ORDER BY created_at DESC').all(userId) as any[];
+    return rows.map(r => this._mapPropAccount(r));
+  }
+
+  async getPropAccount(id: string): Promise<PropAccount | undefined> {
+    const row = sqlite.prepare('SELECT * FROM prop_accounts WHERE id = ?').get(id) as any;
+    if (!row) return undefined;
+    return this._mapPropAccount(row);
+  }
+
+  async createPropAccount(data: { userId: number; firm: string; accountNumber?: string; accountSize?: number; phase?: string; profitTarget?: number; maxDrawdown?: number; dailyDrawdown?: number; currentBalance?: number; credentials?: string }): Promise<PropAccount> {
+    const { v4: uuidv4 } = await import('uuid');
+    const id = uuidv4();
+    sqlite.prepare(`
+      INSERT INTO prop_accounts (id, user_id, firm, account_number, account_size, phase, profit_target, max_drawdown, daily_drawdown, current_balance, credentials)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    `).run(
+      id, data.userId, data.firm, data.accountNumber ?? null,
+      data.accountSize ?? null, data.phase ?? 'evaluation',
+      data.profitTarget ?? null, data.maxDrawdown ?? null, data.dailyDrawdown ?? null,
+      data.currentBalance ?? null, data.credentials ?? null
+    );
+    return this.getPropAccount(id) as Promise<PropAccount>;
+  }
+
+  async updatePropAccount(id: string, data: Partial<PropAccount>): Promise<PropAccount | undefined> {
+    const colMap: Record<string, string> = {
+      firm: 'firm', accountNumber: 'account_number', accountSize: 'account_size',
+      phase: 'phase', profitTarget: 'profit_target', maxDrawdown: 'max_drawdown',
+      dailyDrawdown: 'daily_drawdown', currentBalance: 'current_balance',
+      currentPnl: 'current_pnl', status: 'status', credentials: 'credentials',
+    };
+    const fields: string[] = [];
+    const values: any[] = [];
+    for (const [key, col] of Object.entries(colMap)) {
+      if (key in data) { fields.push(`${col} = ?`); values.push((data as any)[key]); }
+    }
+    if (fields.length === 0) return this.getPropAccount(id);
+    values.push(id);
+    sqlite.prepare(`UPDATE prop_accounts SET ${fields.join(', ')} WHERE id = ?`).run(...values);
+    return this.getPropAccount(id);
+  }
+
+  async deletePropAccount(id: string): Promise<void> {
+    sqlite.prepare('DELETE FROM prop_accounts WHERE id = ?').run(id);
   }
 }
 

@@ -1,7 +1,8 @@
 import { useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { Play, Trophy, AlertTriangle, Activity, Target, Zap } from "lucide-react";
+import { Play, Trophy, AlertTriangle, Activity, Target, Zap, Bot, Plus, Trash2, Sparkles, Code, Clock } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { apiRequest } from "@/lib/queryClient";
 
 type BotChallenge = {
   id: number;
@@ -209,8 +210,212 @@ function ActiveChallengeCard({ challenge }: { challenge: BotChallenge }) {
   );
 }
 
+// ── Bot Builder Tab ──────────────────────────────────────────────────────────
+type TradingBot = {
+  id: string;
+  name: string;
+  description: string | null;
+  strategyType: string;
+  model: string;
+  indicators: string | null;
+  entryRules: string | null;
+  exitRules: string | null;
+  riskRules: string | null;
+  timeframe: string;
+  symbols: string;
+  status: string;
+  backtestResults: string | null;
+  createdAt: string;
+};
+
+function BotBuilderTab() {
+  const qc = useQueryClient();
+  const [showCreate, setShowCreate] = useState(false);
+  const [viewBot, setViewBot] = useState<TradingBot | null>(null);
+  const [form, setForm] = useState({ name: "", description: "", timeframe: "5m", symbols: "ES,NQ" });
+
+  const { data: bots = [] } = useQuery<TradingBot[]>({ queryKey: ["/api/trading-bots"] });
+
+  const createBot = useMutation({
+    mutationFn: async () => {
+      const res = await apiRequest("POST", "/api/trading-bots", {
+        name: form.name,
+        description: form.description,
+        timeframe: form.timeframe,
+        symbols: JSON.stringify(form.symbols.split(",").map(s => s.trim())),
+      });
+      return res.json();
+    },
+    onSuccess: (data) => {
+      qc.invalidateQueries({ queryKey: ["/api/trading-bots"] });
+      setShowCreate(false);
+      setForm({ name: "", description: "", timeframe: "5m", symbols: "ES,NQ" });
+      setViewBot(data);
+    },
+  });
+
+  const generateStrategy = useMutation({
+    mutationFn: async (id: string) => {
+      const res = await apiRequest("POST", `/api/trading-bots/${id}/generate`);
+      return res.json();
+    },
+    onSuccess: (data) => {
+      qc.invalidateQueries({ queryKey: ["/api/trading-bots"] });
+      setViewBot(data);
+    },
+  });
+
+  const deleteBot = useMutation({
+    mutationFn: async (id: string) => { await apiRequest("DELETE", `/api/trading-bots/${id}`); },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["/api/trading-bots"] });
+      setViewBot(null);
+    },
+  });
+
+  const statusColor = (s: string) => {
+    if (s === "generated") return "bg-emerald-500/10 text-emerald-400";
+    if (s === "active") return "bg-blue-500/10 text-blue-400";
+    return "bg-yellow-500/10 text-yellow-400";
+  };
+
+  return (
+    <div className="space-y-4">
+      <div className="flex items-center justify-between">
+        <p className="text-sm text-muted-foreground">Create AI-powered trading bots using plain English descriptions.</p>
+        <Button size="sm" onClick={() => setShowCreate(true)} className="gap-1"><Plus className="w-3 h-3" /> Create Bot</Button>
+      </div>
+
+      {showCreate && (
+        <div className="bg-card border border-border rounded-lg p-5 space-y-4">
+          <h3 className="font-semibold text-foreground">Create Trading Bot</h3>
+          <div>
+            <label className="text-sm text-muted-foreground">Bot Name</label>
+            <input className="w-full mt-1 px-3 py-2 bg-background border border-border rounded-md text-sm text-foreground" placeholder="My Scalper Bot" value={form.name} onChange={e => setForm({ ...form, name: e.target.value })} />
+          </div>
+          <div>
+            <label className="text-sm text-muted-foreground">Strategy Description (plain English)</label>
+            <textarea className="w-full mt-1 px-3 py-2 bg-background border border-border rounded-md text-sm text-foreground min-h-[100px]" placeholder="Describe your strategy... e.g. 'Buy when RSI crosses above 30 on 5-min chart with volume confirmation, sell when RSI hits 70'" value={form.description} onChange={e => setForm({ ...form, description: e.target.value })} />
+          </div>
+          <div className="grid grid-cols-2 gap-4">
+            <div>
+              <label className="text-sm text-muted-foreground">Timeframe</label>
+              <select className="w-full mt-1 px-3 py-2 bg-background border border-border rounded-md text-sm text-foreground" value={form.timeframe} onChange={e => setForm({ ...form, timeframe: e.target.value })}>
+                {["1m", "5m", "15m", "30m", "1h", "4h", "1d"].map(t => <option key={t} value={t}>{t}</option>)}
+              </select>
+            </div>
+            <div>
+              <label className="text-sm text-muted-foreground">Symbols (comma-separated)</label>
+              <input className="w-full mt-1 px-3 py-2 bg-background border border-border rounded-md text-sm text-foreground" placeholder="ES,NQ" value={form.symbols} onChange={e => setForm({ ...form, symbols: e.target.value })} />
+            </div>
+          </div>
+          <div className="flex gap-2">
+            <Button onClick={() => createBot.mutate()} disabled={!form.name || createBot.isPending}>Create</Button>
+            <Button variant="outline" onClick={() => setShowCreate(false)}>Cancel</Button>
+          </div>
+        </div>
+      )}
+
+      {bots.length === 0 && !showCreate && (
+        <div className="text-center py-12 text-muted-foreground">
+          <Bot className="w-10 h-10 mx-auto mb-2 opacity-40" />
+          <p className="text-sm">No bots yet. Create one to get started.</p>
+        </div>
+      )}
+
+      <div className="grid gap-4 md:grid-cols-2">
+        {bots.map(bot => (
+          <div key={bot.id} className="bg-card border border-border rounded-lg p-4 space-y-3 cursor-pointer hover:border-primary/30 transition-colors" onClick={() => setViewBot(bot)}>
+            <div className="flex items-start justify-between">
+              <div>
+                <h3 className="font-semibold text-foreground">{bot.name}</h3>
+                <span className="text-xs text-muted-foreground flex items-center gap-1">
+                  <Clock className="w-3 h-3" /> {bot.timeframe} &middot; {(() => { try { return JSON.parse(bot.symbols).join(", "); } catch { return bot.symbols; } })()}
+                </span>
+              </div>
+              <span className={`px-2 py-0.5 rounded text-xs font-medium ${statusColor(bot.status)}`}>{bot.status}</span>
+            </div>
+            {bot.description && <p className="text-sm text-muted-foreground line-clamp-2">{bot.description}</p>}
+            <div className="flex gap-2">
+              {bot.status === "draft" && (
+                <Button size="sm" variant="outline" className="gap-1" onClick={e => { e.stopPropagation(); generateStrategy.mutate(bot.id); }}>
+                  <Sparkles className="w-3 h-3" /> Generate Strategy
+                </Button>
+              )}
+              <Button size="sm" variant="ghost" onClick={e => { e.stopPropagation(); deleteBot.mutate(bot.id); }}>
+                <Trash2 className="w-3 h-3 text-destructive" />
+              </Button>
+            </div>
+          </div>
+        ))}
+      </div>
+
+      {/* Bot Detail Modal */}
+      {viewBot && (
+        <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4" onClick={() => setViewBot(null)}>
+          <div className="bg-card border border-border rounded-lg p-6 max-w-3xl w-full max-h-[85vh] overflow-y-auto" onClick={e => e.stopPropagation()}>
+            <div className="flex items-center justify-between mb-4">
+              <div>
+                <h3 className="font-semibold text-lg text-foreground">{viewBot.name}</h3>
+                <span className="text-sm text-muted-foreground">{viewBot.timeframe} &middot; {(() => { try { return JSON.parse(viewBot.symbols).join(", "); } catch { return viewBot.symbols; } })()}</span>
+              </div>
+              <div className="flex gap-2">
+                {viewBot.status === "draft" && (
+                  <Button size="sm" className="gap-1" onClick={() => generateStrategy.mutate(viewBot.id)} disabled={generateStrategy.isPending}>
+                    <Sparkles className="w-3 h-3" /> {generateStrategy.isPending ? "Generating..." : "Generate Strategy"}
+                  </Button>
+                )}
+              </div>
+            </div>
+            {viewBot.description && <p className="text-sm text-muted-foreground mb-4">{viewBot.description}</p>}
+
+            {(viewBot.indicators || viewBot.entryRules || viewBot.exitRules || viewBot.riskRules) ? (
+              <div className="space-y-4">
+                {viewBot.indicators && (
+                  <div>
+                    <h4 className="text-xs font-semibold text-muted-foreground uppercase mb-1">Indicators</h4>
+                    <pre className="bg-background border border-border rounded-lg p-3 text-xs text-foreground whitespace-pre-wrap font-mono">{viewBot.indicators}</pre>
+                  </div>
+                )}
+                {viewBot.entryRules && (
+                  <div>
+                    <h4 className="text-xs font-semibold text-muted-foreground uppercase mb-1">Entry Rules</h4>
+                    <pre className="bg-background border border-border rounded-lg p-3 text-xs text-foreground whitespace-pre-wrap font-mono">{viewBot.entryRules}</pre>
+                  </div>
+                )}
+                {viewBot.exitRules && (
+                  <div>
+                    <h4 className="text-xs font-semibold text-muted-foreground uppercase mb-1">Exit Rules</h4>
+                    <pre className="bg-background border border-border rounded-lg p-3 text-xs text-foreground whitespace-pre-wrap font-mono">{viewBot.exitRules}</pre>
+                  </div>
+                )}
+                {viewBot.riskRules && (
+                  <div>
+                    <h4 className="text-xs font-semibold text-muted-foreground uppercase mb-1">Risk Rules</h4>
+                    <pre className="bg-background border border-border rounded-lg p-3 text-xs text-foreground whitespace-pre-wrap font-mono">{viewBot.riskRules}</pre>
+                  </div>
+                )}
+              </div>
+            ) : (
+              <div className="text-center py-12 text-muted-foreground">
+                <Code className="w-12 h-12 mx-auto mb-3 opacity-40" />
+                <p>Click "Generate Strategy" for AI to create indicators, entry, exit, and risk rules.</p>
+              </div>
+            )}
+
+            <div className="flex justify-end mt-4">
+              <Button variant="outline" onClick={() => setViewBot(null)}>Close</Button>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
 export default function BotChallengePage() {
   const qc = useQueryClient();
+  const [activeTab, setActiveTab] = useState<"challenges" | "builder">("challenges");
   const { data: challenges = [], isLoading } = useQuery<BotChallenge[]>({
     queryKey: ["/api/bot-challenges"],
     queryFn: () => fetch("/api/bot-challenges").then((r) => r.json()),
@@ -244,12 +449,38 @@ export default function BotChallengePage() {
   return (
     <div className="p-6 max-w-5xl mx-auto">
       {/* Header */}
-      <div className="mb-6">
+      <div className="mb-4">
         <h1 className="text-2xl font-bold text-foreground">Bot Challenge Simulator</h1>
         <p className="text-sm text-muted-foreground mt-0.5">
           Test your bot against real prop firm rules before paying
         </p>
       </div>
+
+      {/* Tab Bar */}
+      <div className="flex gap-1 mb-6 border-b border-border">
+        <button
+          onClick={() => setActiveTab("challenges")}
+          className={`flex items-center gap-1.5 px-4 py-2.5 text-sm font-medium border-b-2 transition-colors ${
+            activeTab === "challenges" ? "border-primary text-primary" : "border-transparent text-muted-foreground hover:text-foreground"
+          }`}
+        >
+          <Target className="w-3.5 h-3.5" /> Challenges
+        </button>
+        <button
+          onClick={() => setActiveTab("builder")}
+          className={`flex items-center gap-1.5 px-4 py-2.5 text-sm font-medium border-b-2 transition-colors ${
+            activeTab === "builder" ? "border-primary text-primary" : "border-transparent text-muted-foreground hover:text-foreground"
+          }`}
+        >
+          <Bot className="w-3.5 h-3.5" /> Bot Builder
+        </button>
+      </div>
+
+      {/* Bot Builder Tab */}
+      {activeTab === "builder" && <BotBuilderTab />}
+
+      {/* Challenges Tab */}
+      {activeTab === "challenges" && <>
 
       {/* Your Order Flow Preset — featured card */}
       <div className="mb-8 bg-gradient-to-r from-indigo-500/10 via-violet-500/10 to-purple-500/10 border border-indigo-500/30 rounded-xl p-6">
@@ -360,6 +591,7 @@ export default function BotChallengePage() {
           </div>
         )}
       </div>
+      </>}
     </div>
   );
 }
