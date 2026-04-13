@@ -134,7 +134,7 @@ export default function LoginPage() {
   }
 
   return (
-    <div className="min-h-screen bg-[#080d1a] flex flex-col items-center justify-center px-4">
+    <div className="min-h-screen bg-background flex flex-col items-center justify-center px-4">
       {/* Background glow */}
       <div
         className="pointer-events-none fixed inset-0 -z-10"
@@ -149,27 +149,27 @@ export default function LoginPage() {
         <div className="flex flex-col items-center mb-8 gap-3">
           <NexusLogo size={52} />
           <div className="text-center">
-            <h1 className="text-2xl font-bold text-white tracking-tight">
+            <h1 className="text-2xl font-bold text-foreground tracking-tight">
               NEXUS OS
             </h1>
-            <p className="text-slate-400 text-sm mt-0.5">
+            <p className="text-muted-foreground text-sm mt-0.5">
               Intelligent operations platform
             </p>
           </div>
         </div>
 
         {/* Card */}
-        <Card className="bg-[#0f1629] border border-white/10 shadow-xl shadow-black/40">
+        <Card className="bg-card border border-border shadow-xl shadow-black/40">
           {/* Mode toggle tabs */}
           <CardHeader className="pb-0 pt-6 px-6">
-            <div className="flex bg-[#080d1a] rounded-lg p-1 gap-1">
+            <div className="flex bg-background rounded-lg p-1 gap-1">
               <button
                 type="button"
                 onClick={() => switchMode("signin")}
                 className={`flex-1 py-2 text-sm font-medium rounded-md transition-colors ${
                   mode === "signin"
-                    ? "bg-indigo-600 text-white shadow"
-                    : "text-slate-400 hover:text-slate-200"
+                    ? "bg-indigo-600 text-foreground shadow"
+                    : "text-muted-foreground hover:text-foreground"
                 }`}
               >
                 Sign In
@@ -179,8 +179,8 @@ export default function LoginPage() {
                 onClick={() => switchMode("register")}
                 className={`flex-1 py-2 text-sm font-medium rounded-md transition-colors ${
                   mode === "register"
-                    ? "bg-indigo-600 text-white shadow"
-                    : "text-slate-400 hover:text-slate-200"
+                    ? "bg-indigo-600 text-foreground shadow"
+                    : "text-muted-foreground hover:text-foreground"
                 }`}
               >
                 Create Account
@@ -205,7 +205,7 @@ export default function LoginPage() {
               <div className="space-y-1.5">
                 <Label
                   htmlFor="username"
-                  className="text-slate-300 text-sm"
+                  className="text-foreground/80 text-sm"
                 >
                   Username
                 </Label>
@@ -217,7 +217,7 @@ export default function LoginPage() {
                   value={username}
                   onChange={(e) => setUsername(e.target.value)}
                   disabled={loading}
-                  className="bg-[#080d1a] border-white/10 text-white placeholder-slate-600 focus:border-indigo-500 focus:ring-indigo-500/30"
+                  className="bg-background border-border text-foreground placeholder-muted-foreground focus:border-indigo-500 focus:ring-indigo-500/30"
                 />
               </div>
 
@@ -225,7 +225,7 @@ export default function LoginPage() {
               <div className="space-y-1.5">
                 <Label
                   htmlFor="password"
-                  className="text-slate-300 text-sm"
+                  className="text-foreground/80 text-sm"
                 >
                   Password
                 </Label>
@@ -239,7 +239,7 @@ export default function LoginPage() {
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
                   disabled={loading}
-                  className="bg-[#080d1a] border-white/10 text-white placeholder-slate-600 focus:border-indigo-500 focus:ring-indigo-500/30"
+                  className="bg-background border-border text-foreground placeholder-muted-foreground focus:border-indigo-500 focus:ring-indigo-500/30"
                 />
               </div>
 
@@ -248,7 +248,7 @@ export default function LoginPage() {
                 <div className="space-y-1.5">
                   <Label
                     htmlFor="confirm-password"
-                    className="text-slate-300 text-sm"
+                    className="text-foreground/80 text-sm"
                   >
                     Confirm Password
                   </Label>
@@ -260,7 +260,7 @@ export default function LoginPage() {
                     value={confirmPassword}
                     onChange={(e) => setConfirmPassword(e.target.value)}
                     disabled={loading}
-                    className="bg-[#080d1a] border-white/10 text-white placeholder-slate-600 focus:border-indigo-500 focus:ring-indigo-500/30"
+                    className="bg-background border-border text-foreground placeholder-muted-foreground focus:border-indigo-500 focus:ring-indigo-500/30"
                   />
                 </div>
               )}
@@ -269,7 +269,7 @@ export default function LoginPage() {
               <Button
                 type="submit"
                 disabled={loading}
-                className="w-full bg-indigo-600 hover:bg-indigo-500 text-white font-semibold mt-2 disabled:opacity-60"
+                className="w-full bg-indigo-600 hover:bg-indigo-500 text-foreground font-semibold mt-2 disabled:opacity-60"
               >
                 {loading
                   ? mode === "signin"
@@ -284,7 +284,7 @@ export default function LoginPage() {
         </Card>
 
         {/* Footer */}
-        <p className="text-center text-xs text-slate-600 mt-6">
+        <p className="text-center text-xs text-muted-foreground mt-6">
           Powered by{" "}
           <span className="text-indigo-500 font-medium">NEXUS OS</span>
         </p>

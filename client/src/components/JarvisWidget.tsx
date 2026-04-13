@@ -783,7 +783,7 @@ export function JarvisWidget() {
           }}
         >
           {/* Header */}
-          <div className="relative z-10 flex items-center justify-between px-6 py-4 border-b border-white/10">
+          <div className="relative z-10 flex items-center justify-between px-6 py-4 border-b border-border">
             <div className="flex items-center gap-3">
               <div className="w-2 h-2 rounded-full bg-cyan-400 animate-pulse" />
               <span className="text-cyan-400/60 text-xs font-mono tracking-[0.3em] uppercase">J.A.R.V.I.S.</span>

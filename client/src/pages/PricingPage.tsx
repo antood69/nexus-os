@@ -306,7 +306,7 @@ export default function PricingPage() {
               <Button
                 data-testid={`cta-${tier.id}`}
                 variant={tier.current ? "outline" : tier.id === "pro" ? "default" : "secondary"}
-                className={`w-full mb-5 text-sm ${tier.id === "agency" ? "bg-violet-600 hover:bg-violet-700 text-white border-0" : ""}`}
+                className={`w-full mb-5 text-sm ${tier.id === "agency" ? "bg-violet-600 hover:bg-violet-700 text-foreground border-0" : ""}`}
                 disabled={tier.current || isLoading}
                 onClick={() => handleUpgrade(tier.id)}
               >

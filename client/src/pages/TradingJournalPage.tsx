@@ -220,7 +220,7 @@ function AddTradeForm({ onClose }: { onClose: () => void }) {
       <div className="flex justify-end gap-3 mt-4">
         <Button variant="ghost" onClick={onClose}>Cancel</Button>
         <Button
-          className="bg-gradient-to-r from-indigo-500 to-violet-600 hover:from-indigo-600 hover:to-violet-700 text-white"
+          className="bg-gradient-to-r from-indigo-500 to-violet-600 hover:from-indigo-600 hover:to-violet-700 text-foreground"
           onClick={() => createMutation.mutate(form)}
           disabled={!form.instrument || !form.entryPrice || createMutation.isPending}
         >
@@ -257,7 +257,7 @@ export default function TradingJournalPage() {
         </div>
         <Button
           onClick={() => setShowForm((p) => !p)}
-          className="bg-gradient-to-r from-indigo-500 to-violet-600 hover:from-indigo-600 hover:to-violet-700 text-white"
+          className="bg-gradient-to-r from-indigo-500 to-violet-600 hover:from-indigo-600 hover:to-violet-700 text-foreground"
         >
           <Plus className="w-4 h-4 mr-2" />
           Add Trade

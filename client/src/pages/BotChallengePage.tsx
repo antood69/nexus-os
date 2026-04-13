@@ -257,7 +257,7 @@ export default function BotChallengePage() {
           <div className="flex-1">
             <div className="flex items-center gap-2 mb-2">
               <div className="w-7 h-7 rounded-full bg-gradient-to-br from-indigo-500 to-violet-600 flex items-center justify-center">
-                <Zap className="w-3.5 h-3.5 text-white" />
+                <Zap className="w-3.5 h-3.5 text-foreground" />
               </div>
               <span className="font-bold text-foreground">Your Order Flow Preset</span>
               <span className="text-xs px-2 py-0.5 rounded-full bg-indigo-500/20 text-indigo-300 font-medium">Recommended</span>
@@ -276,7 +276,7 @@ export default function BotChallengePage() {
           <Button
             onClick={loadOrderFlowPreset}
             disabled={startChallenge.isPending}
-            className="bg-gradient-to-r from-indigo-500 to-violet-600 hover:from-indigo-600 hover:to-violet-700 text-white flex-shrink-0"
+            className="bg-gradient-to-r from-indigo-500 to-violet-600 hover:from-indigo-600 hover:to-violet-700 text-foreground flex-shrink-0"
           >
             <Play className="w-4 h-4 mr-2" />
             Load Preset

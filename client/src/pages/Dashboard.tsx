@@ -50,13 +50,13 @@ function KpiCard({ icon: Icon, label, value, sub, color }: KpiCardProps) {
   const iconClass = bgMap[color] ?? bgMap.indigo;
 
   return (
-    <Card className="bg-[#0f1629] border border-white/10 hover:border-white/20 transition-colors">
+    <Card className="bg-card border border-border hover:border-border/80 transition-colors">
       <CardContent className="pt-5 pb-4 px-5">
         <div className="flex items-start justify-between">
           <div>
-            <p className="text-xs text-slate-400 mb-1">{label}</p>
-            <p className="text-2xl font-bold text-white">{value}</p>
-            <p className="text-xs text-slate-500 mt-1">{sub}</p>
+            <p className="text-xs text-muted-foreground mb-1">{label}</p>
+            <p className="text-2xl font-bold text-foreground">{value}</p>
+            <p className="text-xs text-muted-foreground/70 mt-1">{sub}</p>
           </div>
           <div className={`p-2 rounded-lg ${iconClass}`}>
             <Icon size={18} />
@@ -91,16 +91,16 @@ function QuickLinkCard({ href, icon: Icon, title, description, color }: QuickLin
   return (
     <Link href={href}>
       <a className="group block">
-        <Card className="bg-[#0f1629] border border-white/10 hover:border-indigo-500/40 hover:bg-[#111827] transition-all cursor-pointer h-full">
+        <Card className="bg-card border border-border hover:border-primary/40 hover:bg-secondary transition-all cursor-pointer h-full">
           <CardContent className="pt-5 pb-4 px-5 flex items-center gap-4">
             <div className={`${colorMap[color] ?? colorMap.indigo} transition-colors`}>
               <Icon size={22} />
             </div>
             <div>
-              <p className="text-sm font-medium text-slate-200 group-hover:text-white transition-colors">
+              <p className="text-sm font-medium text-foreground group-hover:text-foreground transition-colors">
                 {title}
               </p>
-              <p className="text-xs text-slate-500">{description}</p>
+              <p className="text-xs text-muted-foreground">{description}</p>
             </div>
           </CardContent>
         </Card>
@@ -127,22 +127,22 @@ export default function Dashboard() {
   ).length;
 
   return (
-    <div className="min-h-screen bg-[#080d1a] text-white">
+    <div className="min-h-screen bg-background text-foreground">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 space-y-8">
 
         {/* Page header */}
         <div>
-          <h1 className="text-2xl font-bold text-white tracking-tight">
+          <h1 className="text-2xl font-bold text-foreground tracking-tight">
             Dashboard
           </h1>
-          <p className="text-slate-400 text-sm mt-1">
+          <p className="text-muted-foreground text-sm mt-1">
             NEXUS OS — operational overview
           </p>
         </div>
 
         {/* ── Row 1: Core KPIs ── */}
         <section>
-          <h2 className="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-3">
+          <h2 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-3">
             Core Metrics
           </h2>
           <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
@@ -179,7 +179,7 @@ export default function Dashboard() {
 
         {/* ── Row 2: Trading & Escalations KPIs ── */}
         <section>
-          <h2 className="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-3">
+          <h2 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-3">
             Trading &amp; Escalations
           </h2>
           <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
@@ -202,7 +202,7 @@ export default function Dashboard() {
 
         {/* ── Quick Links ── */}
         <section>
-          <h2 className="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-3">
+          <h2 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-3">
             Quick Access
           </h2>
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">

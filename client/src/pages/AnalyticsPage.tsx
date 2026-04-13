@@ -65,15 +65,15 @@ function StatCard({
   const iconColor = colorMap[color] ?? "text-indigo-400";
 
   return (
-    <Card className="bg-[#0f1629] border border-white/10">
+    <Card className="bg-card border border-border">
       <CardContent className="pt-5 pb-4 px-5">
         <div className="flex items-center gap-3">
           <div className={`${iconColor} shrink-0`}>
             <Icon size={20} />
           </div>
           <div>
-            <p className="text-xs text-slate-400 leading-none mb-1">{label}</p>
-            <p className="text-xl font-semibold text-white">{value}</p>
+            <p className="text-xs text-muted-foreground leading-none mb-1">{label}</p>
+            <p className="text-xl font-semibold text-foreground">{value}</p>
           </div>
         </div>
       </CardContent>
@@ -83,7 +83,7 @@ function StatCard({
 
 function EmptyState({ message }: { message: string }) {
   return (
-    <div className="flex flex-col items-center justify-center py-12 text-slate-500 gap-2">
+    <div className="flex flex-col items-center justify-center py-12 text-muted-foreground gap-2">
       <Inbox size={32} className="opacity-40" />
       <p className="text-sm">{message}</p>
     </div>
@@ -107,29 +107,29 @@ function TradingStatsTab() {
       </div>
 
       {/* Firm Breakdown */}
-      <Card className="bg-[#0f1629] border border-white/10">
+      <Card className="bg-card border border-border">
         <CardHeader className="pb-2">
-          <CardTitle className="text-sm font-medium text-slate-200">
+          <CardTitle className="text-sm font-medium text-foreground">
             Firm Breakdown
           </CardTitle>
         </CardHeader>
         <CardContent className="px-0">
           <Table>
             <TableHeader>
-              <TableRow className="border-white/10 hover:bg-transparent">
-                <TableHead className="text-slate-400 pl-6">Firm</TableHead>
-                <TableHead className="text-slate-400">Trades</TableHead>
-                <TableHead className="text-slate-400">Win Rate</TableHead>
-                <TableHead className="text-slate-400">Avg P&L</TableHead>
-                <TableHead className="text-slate-400">Total P&L</TableHead>
-                <TableHead className="text-slate-400 pr-6">Status</TableHead>
+              <TableRow className="border-border hover:bg-transparent">
+                <TableHead className="text-muted-foreground pl-6">Firm</TableHead>
+                <TableHead className="text-muted-foreground">Trades</TableHead>
+                <TableHead className="text-muted-foreground">Win Rate</TableHead>
+                <TableHead className="text-muted-foreground">Avg P&L</TableHead>
+                <TableHead className="text-muted-foreground">Total P&L</TableHead>
+                <TableHead className="text-muted-foreground pr-6">Status</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
-              <TableRow className="border-white/10 hover:bg-white/5">
+              <TableRow className="border-border hover:bg-white/5">
                 <TableCell
                   colSpan={6}
-                  className="text-center py-10 text-slate-500 text-sm"
+                  className="text-center py-10 text-muted-foreground text-sm"
                 >
                   <EmptyState message="Connect firm to see data" />
                 </TableCell>
@@ -140,9 +140,9 @@ function TradingStatsTab() {
       </Card>
 
       {/* Instrument Breakdown */}
-      <Card className="bg-[#0f1629] border border-white/10">
+      <Card className="bg-card border border-border">
         <CardHeader className="pb-2">
-          <CardTitle className="text-sm font-medium text-slate-200">
+          <CardTitle className="text-sm font-medium text-foreground">
             Instrument Breakdown
           </CardTitle>
         </CardHeader>
@@ -152,7 +152,7 @@ function TradingStatsTab() {
       </Card>
 
       {/* Footer note */}
-      <p className="text-xs text-slate-500 text-center">
+      <p className="text-xs text-muted-foreground text-center">
         Connect your prop firm accounts in the Trading module to see live
         performance data.
       </p>
@@ -184,9 +184,9 @@ function AgentStatsTab() {
       </div>
 
       {/* Top Agents by Completion */}
-      <Card className="bg-[#0f1629] border border-white/10">
+      <Card className="bg-card border border-border">
         <CardHeader className="pb-2">
-          <CardTitle className="text-sm font-medium text-slate-200">
+          <CardTitle className="text-sm font-medium text-foreground">
             Top Agents by Completion
           </CardTitle>
         </CardHeader>
@@ -196,15 +196,15 @@ function AgentStatsTab() {
       </Card>
 
       {/* Recent Escalations */}
-      <Card className="bg-[#0f1629] border border-white/10">
+      <Card className="bg-card border border-border">
         <CardHeader className="pb-2">
-          <CardTitle className="text-sm font-medium text-slate-200">
+          <CardTitle className="text-sm font-medium text-foreground">
             Recent Escalations
           </CardTitle>
         </CardHeader>
         <CardContent className="px-0">
           {isLoading ? (
-            <div className="flex items-center justify-center py-10 text-slate-500 text-sm">
+            <div className="flex items-center justify-center py-10 text-muted-foreground text-sm">
               Loading…
             </div>
           ) : escalations.length === 0 ? (
@@ -212,27 +212,27 @@ function AgentStatsTab() {
           ) : (
             <Table>
               <TableHeader>
-                <TableRow className="border-white/10 hover:bg-transparent">
-                  <TableHead className="text-slate-400 pl-6">ID</TableHead>
-                  <TableHead className="text-slate-400">Agent</TableHead>
-                  <TableHead className="text-slate-400">Reason</TableHead>
-                  <TableHead className="text-slate-400">Status</TableHead>
-                  <TableHead className="text-slate-400 pr-6">Created</TableHead>
+                <TableRow className="border-border hover:bg-transparent">
+                  <TableHead className="text-muted-foreground pl-6">ID</TableHead>
+                  <TableHead className="text-muted-foreground">Agent</TableHead>
+                  <TableHead className="text-muted-foreground">Reason</TableHead>
+                  <TableHead className="text-muted-foreground">Status</TableHead>
+                  <TableHead className="text-muted-foreground pr-6">Created</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
                 {escalations.map((e) => (
                   <TableRow
                     key={e.id}
-                    className="border-white/10 hover:bg-white/5"
+                    className="border-border hover:bg-white/5"
                   >
-                    <TableCell className="pl-6 text-slate-300 font-mono text-xs">
+                    <TableCell className="pl-6 text-foreground/80 font-mono text-xs">
                       #{e.id}
                     </TableCell>
-                    <TableCell className="text-slate-300">
+                    <TableCell className="text-foreground/80">
                       {e.agent ?? "—"}
                     </TableCell>
-                    <TableCell className="text-slate-400 max-w-xs truncate">
+                    <TableCell className="text-muted-foreground max-w-xs truncate">
                       {e.reason ?? "—"}
                     </TableCell>
                     <TableCell>
@@ -247,7 +247,7 @@ function AgentStatsTab() {
                         {e.status ?? "open"}
                       </Badge>
                     </TableCell>
-                    <TableCell className="text-slate-500 text-xs pr-6">
+                    <TableCell className="text-muted-foreground text-xs pr-6">
                       {e.created_at
                         ? new Date(e.created_at).toLocaleDateString()
                         : "—"}
@@ -270,30 +270,30 @@ export default function AnalyticsPage() {
   const [tab, setTab] = useState("trading");
 
   return (
-    <div className="min-h-screen bg-[#080d1a] text-white">
+    <div className="min-h-screen bg-background text-foreground">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 space-y-6">
         {/* Header */}
         <div>
-          <h1 className="text-2xl font-bold text-white tracking-tight">
+          <h1 className="text-2xl font-bold text-foreground tracking-tight">
             Performance Analytics
           </h1>
-          <p className="text-slate-400 text-sm mt-1">
+          <p className="text-muted-foreground text-sm mt-1">
             Cross-firm trading metrics &amp; agent efficiency
           </p>
         </div>
 
         {/* Tabs */}
         <Tabs value={tab} onValueChange={setTab}>
-          <TabsList className="bg-[#0f1629] border border-white/10">
+          <TabsList className="bg-card border border-border">
             <TabsTrigger
               value="trading"
-              className="data-[state=active]:bg-indigo-600 data-[state=active]:text-white text-slate-400"
+              className="data-[state=active]:bg-indigo-600 data-[state=active]:text-foreground text-muted-foreground"
             >
               Trading Stats
             </TabsTrigger>
             <TabsTrigger
               value="agent"
-              className="data-[state=active]:bg-indigo-600 data-[state=active]:text-white text-slate-400"
+              className="data-[state=active]:bg-indigo-600 data-[state=active]:text-foreground text-muted-foreground"
             >
               Agent Stats
             </TabsTrigger>
