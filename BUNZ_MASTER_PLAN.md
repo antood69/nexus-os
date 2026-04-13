@@ -1,5 +1,5 @@
-# NEXUS OS — Master Plan
-## The AI Agent Orchestrator Where Builders Get Paid
+# Bunz — Master Plan
+## The AI Agent Orchestrator Where Vibe Coders Get Stuff Done
 
 > Version 2.0 — Research-backed, implementation-ready
 > Last updated: 2026

@@ -35,7 +35,7 @@ function GoogleIcon() {
   );
 }
 
-function NexusWordmark() {
+function BunzWordmark() {
   return (
     <div className="flex items-center gap-1 justify-center mb-1">
       <svg
@@ -43,7 +43,7 @@ function NexusWordmark() {
         height="32"
         viewBox="0 0 32 32"
         fill="none"
-        aria-label="NEXUS OS logo"
+        aria-label="Bunz logo"
         className="flex-shrink-0"
       >
         <rect
@@ -203,15 +203,18 @@ export default function LoginPage() {
   return (
     <div className="min-h-screen flex items-center justify-center p-4 bg-[radial-gradient(ellipse_at_top,_hsl(239_20%_12%)_0%,_hsl(var(--background))_70%)]">
       <div className="w-full max-w-md">
-        {/* Logo & wordmark */}
+        {/* Logo & mascot */}
         <div className="text-center mb-6">
-          <NexusWordmark />
+          <img
+            src="/tina-dance-full.gif"
+            alt="Bunz mascot"
+            className="w-24 h-24 mx-auto mb-2 rounded-full"
+          />
           <h1 className="mt-2 text-2xl font-bold tracking-tight text-foreground">
-            <span className="font-extrabold">NEXUS</span>
-            <span className="font-light text-muted-foreground ml-1">OS</span>
+            <span className="font-extrabold">Bunz</span>
           </h1>
           <p className="text-sm text-muted-foreground mt-1">
-            Intelligent trading infrastructure
+            build cool stuff. ship faster. vibe harder.
           </p>
         </div>
 

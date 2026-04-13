@@ -95,7 +95,7 @@ const tiers = [
 const faqs = [
   {
     q: "What are tokens?",
-    a: "Tokens are the units that power AI calls in NEXUS OS. Each message sent to an AI model consumes tokens based on the length of input and output. Your plan includes a monthly token allowance, and you can buy additional token packs anytime.",
+    a: "Tokens are the units that power AI calls in Bunz. Each message sent to an AI model consumes tokens based on the length of input and output. Your plan includes a monthly token allowance, and you can buy additional token packs anytime.",
   },
   {
     q: "Can I switch plans at any time?",
@@ -111,7 +111,7 @@ const faqs = [
   },
   {
     q: "What's white-label?",
-    a: "Agency plan lets you remove NEXUS OS branding and replace it with your own logo and colors — great for client deployments.",
+    a: "Agency plan lets you remove Bunz branding and replace it with your own logo and colors — great for client deployments.",
   },
   {
     q: "Is there a free trial for Pro?",
@@ -190,7 +190,7 @@ export default function PricingPage() {
       {/* Success / Cancel banners */}
       {checkoutSuccess && (
         <div className="mb-6 rounded-lg border border-emerald-500/40 bg-emerald-500/10 px-4 py-3 text-sm text-emerald-400 text-center">
-          Subscription activated! Welcome to NEXUS OS {annual ? "Annual" : "Monthly"}.
+          Subscription activated! Welcome to Bunz {annual ? "Annual" : "Monthly"} — let's get it. 🔥
         </div>
       )}
       {checkoutCanceled && (

@@ -30,9 +30,9 @@ const navItems = [
   { href: "/settings", label: "Settings", icon: Settings },
 ];
 
-function NexusLogo() {
+function BunzLogo() {
   return (
-    <svg width="28" height="28" viewBox="0 0 32 32" fill="none" aria-label="NEXUS OS">
+    <svg width="28" height="28" viewBox="0 0 32 32" fill="none" aria-label="Bunz">
       <rect x="2" y="2" width="28" height="28" rx="6" stroke="hsl(239 84% 67%)" strokeWidth="2" />
       <path d="M10 22V10l6 8 6-8v12" stroke="hsl(263 70% 58%)" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" />
     </svg>
@@ -81,8 +81,8 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
       <aside className="w-56 flex-shrink-0 border-r border-border bg-sidebar flex flex-col">
         {/* Logo */}
         <div className="flex items-center gap-2.5 px-4 h-14 border-b border-border">
-          <NexusLogo />
-          <span className="font-semibold text-sm tracking-tight text-foreground">NEXUS OS</span>
+          <BunzLogo />
+          <span className="font-semibold text-sm tracking-tight text-foreground">Bunz</span>
         </div>
 
         {/* User info */}

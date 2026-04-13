@@ -1,5 +1,5 @@
 /**
- * One-time script to create Stripe products and prices for NEXUS OS.
+ * One-time script to create Stripe products and prices for Bunz.
  * Run once: npx tsx server/setup-stripe.ts
  * 
  * It will output the price IDs — paste them into your .env file.
@@ -19,11 +19,11 @@ const stripe = new Stripe(process.env.STRIPE_SECRET_KEY, {
 });
 
 async function main() {
-  console.log("🚀 Setting up Stripe products for NEXUS OS...\n");
+  console.log("🚀 Setting up Stripe products for Bunz...\n");
 
   // ── PRO PLAN ──────────────────────────────────────────────────────────────
   const pro = await stripe.products.create({
-    name: "NEXUS OS Pro",
+    name: "Bunz Pro",
     description: "Scale your AI workforce without limits — 10 agents, 10 workflows, all 4 AI models.",
     metadata: { tier: "pro" },
   });
@@ -46,7 +46,7 @@ async function main() {
 
   // ── AGENCY PLAN ───────────────────────────────────────────────────────────
   const agency = await stripe.products.create({
-    name: "NEXUS OS Agency",
+    name: "Bunz Agency",
     description: "Unlimited power for teams & white-label deployments.",
     metadata: { tier: "agency" },
   });

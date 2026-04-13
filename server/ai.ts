@@ -15,7 +15,7 @@ export interface AiResponse {
 }
 
 const SYSTEM_DEFAULT =
-  "You are a focused AI agent inside NEXUS OS, an AI orchestration platform. Be concise, action-oriented, and helpful.";
+  "You are a focused AI agent inside Bunz, an AI orchestration platform. Be concise, action-oriented, and helpful.";
 
 function claudeClient() {
   return new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });

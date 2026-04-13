@@ -17,7 +17,7 @@ const ThemeContext = createContext<ThemeContextType>({
 export function ThemeProvider({ children }: { children: ReactNode }) {
   const [theme, setThemeState] = useState<Theme>(() => {
     if (typeof window !== "undefined") {
-      return (localStorage.getItem("nexus-theme") as Theme) || "dark";
+      return (localStorage.getItem("bunz-theme") as Theme) || "dark";
     }
     return "dark";
   });
@@ -26,7 +26,7 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
     const root = document.documentElement;
     root.classList.remove("light", "dark");
     root.classList.add(theme);
-    localStorage.setItem("nexus-theme", theme);
+    localStorage.setItem("bunz-theme", theme);
   }, [theme]);
 
   const setTheme = (t: Theme) => setThemeState(t);

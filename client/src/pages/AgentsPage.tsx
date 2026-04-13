@@ -194,7 +194,7 @@ export default function AgentsPage() {
             <div
               key={a.id}
               data-testid={`card-agent-${a.id}`}
-              className="rounded-lg border border-border bg-card p-4 nexus-card-hover transition-all"
+              className="rounded-lg border border-border bg-card p-4 bunz-card-hover transition-all"
             >
               <div className="flex items-start gap-3 mb-3">
                 <div className={`w-9 h-9 rounded-lg flex items-center justify-center text-xs font-bold ${roleColors[a.role] || "bg-muted text-muted-foreground"}`}>

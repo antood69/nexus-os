@@ -161,7 +161,7 @@ export default function WorkflowsPage() {
             <div
               key={w.id}
               data-testid={`card-workflow-${w.id}`}
-              className="rounded-lg border border-border bg-card p-4 nexus-card-hover transition-all"
+              className="rounded-lg border border-border bg-card p-4 bunz-card-hover transition-all"
             >
               <div className="flex items-start justify-between mb-3">
                 <Link href={`/workflows/${w.id}`}>

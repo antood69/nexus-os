@@ -155,7 +155,7 @@ export default function Dashboard() {
             Dashboard
           </h1>
           <p className="text-muted-foreground text-sm mt-1">
-            NEXUS OS — operational overview
+            Bunz — what's cooking
           </p>
         </div>
 

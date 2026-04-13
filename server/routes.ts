@@ -338,7 +338,7 @@ export async function registerRoutes(
     const { message, context } = req.body as { message: string; context?: string };
     if (!message) return res.status(400).json({ error: "message required" });
 
-    const systemPrompt = `You are Jarvis, the AI assistant for NEXUS OS — an AI agent orchestration platform. You have full awareness of the platform and can help with:
+    const systemPrompt = `You are Jarvis, the AI assistant for Bunz — an AI agent orchestration platform. You have full awareness of the platform and can help with:
 - Creating and managing workflows, agents, and jobs
 - Trading strategy questions and prop firm guidance  
 - Analyzing audit results and escalations
@@ -541,7 +541,7 @@ Be concise, direct, and helpful. If asked to perform an action, explain what you
         line_items: [{
           price_data: {
             currency: "usd",
-            product_data: { name: `NEXUS OS — ${pack.label}` },
+            product_data: { name: `Bunz — ${pack.label}` },
             unit_amount: pack.price,
           },
           quantity: 1,

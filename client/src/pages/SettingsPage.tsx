@@ -41,7 +41,7 @@ export default function SettingsPage() {
     <div className="p-6 max-w-2xl mx-auto space-y-8">
       <div>
         <h1 className="text-2xl font-semibold text-foreground">Settings</h1>
-        <p className="text-sm text-muted-foreground mt-1">Manage your NEXUS OS preferences</p>
+        <p className="text-sm text-muted-foreground mt-1">Manage your Bunz preferences</p>
       </div>
 
       <div className="border border-border rounded-lg divide-y divide-border">

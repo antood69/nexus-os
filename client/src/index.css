@@ -2,7 +2,7 @@
 @tailwind components;
 @tailwind utilities;
 
-/* NEXUS OS — Global tokens (non-theme) */
+/* Bunz — Global tokens (non-theme) */
 :root {
   --opaque-button-border-intensity: 9;
   --font-sans: 'Inter', 'DM Sans', system-ui, sans-serif;
@@ -135,7 +135,7 @@
   }
 }
 
-/* NEXUS glow effects */
+/* Bunz glow effects */
 .glow-indigo {
   box-shadow: 0 0 20px hsl(239 84% 67% / 0.15), 0 0 60px hsl(239 84% 67% / 0.05);
 }
@@ -149,7 +149,7 @@
 }
 
 /* Subtle gradient for cards on hover */
-.nexus-card-hover:hover {
+.bunz-card-hover:hover {
   background: hsl(var(--secondary));
 }
 

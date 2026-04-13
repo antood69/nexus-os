@@ -1,5 +1,5 @@
 /**
- * NEXUS OS Agent Watchdog
+ * Bunz Agent Watchdog
  * Detects stuck agents, loop patterns, and escalates automatically.
  */
 

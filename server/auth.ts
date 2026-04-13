@@ -6,7 +6,7 @@ import { sendVerificationEmail, sendLoginAlertEmail, sendWelcomeEmail } from "./
 
 const OWNER_EMAIL = "reederb46@gmail.com";
 const SESSION_DURATION_MS = 30 * 24 * 60 * 60 * 1000; // 30 days
-const COOKIE_NAME = "nexus_session";
+const COOKIE_NAME = "bunz_session";
 
 // ── Extend Express Request with user context ─────────────────────────────────
 declare global {
@@ -170,7 +170,7 @@ export function createAuthRouter(): Router {
     await storage.createNotification({
       userId: user.id,
       type: "welcome",
-      title: "Welcome to NEXUS OS",
+      title: "Welcome to Bunz!",
       message: "Your account has been created. Check your email to verify your address.",
     });
 
@@ -391,7 +391,7 @@ export function createAuthRouter(): Router {
         await storage.createNotification({
           userId: user.id,
           type: "welcome",
-          title: "Welcome to NEXUS OS",
+          title: "Welcome to Bunz!",
           message: "Your account has been created via GitHub. You're all set.",
         });
       } else {
@@ -483,7 +483,7 @@ export function createAuthRouter(): Router {
         await storage.createNotification({
           userId: user.id,
           type: "welcome",
-          title: "Welcome to NEXUS OS",
+          title: "Welcome to Bunz!",
           message: "Your account has been created via Google. You're all set.",
         });
       } else {

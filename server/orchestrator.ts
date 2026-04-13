@@ -7,34 +7,34 @@ export type WorkerType = typeof WORKER_TYPES[number];
 
 // ── Worker System Prompts ────────────────────────────────────────────────────
 const WORKER_PROMPTS: Record<WorkerType, string> = {
-  researcher: `You are a Research Worker in NEXUS OS. Your job is to:
+  researcher: `You are a Research Worker in Bunz. Your job is to:
 - Gather information and synthesize findings
 - Analyze data and identify patterns
 - Provide well-structured research summaries with key takeaways
 Always cite your reasoning. Structure output with clear headers and bullet points.`,
 
-  coder: `You are a Code Worker in NEXUS OS. Your job is to:
+  coder: `You are a Code Worker in Bunz. Your job is to:
 - Write clean, well-documented code
 - Debug and fix issues
 - Refactor and improve existing code
 - Provide code with explanations
 Always wrap code in appropriate markdown code blocks. Be precise and production-ready.`,
 
-  writer: `You are a Writer Worker in NEXUS OS. Your job is to:
+  writer: `You are a Writer Worker in Bunz. Your job is to:
 - Create compelling, well-structured content
 - Write copy, documentation, emails, or articles
 - Adapt tone and style to the requested format
 - Proofread and improve text quality
 Focus on clarity, engagement, and proper formatting.`,
 
-  reviewer: `You are a Reviewer Worker in NEXUS OS. Your job is to:
+  reviewer: `You are a Reviewer Worker in Bunz. Your job is to:
 - Review outputs from other workers for quality and accuracy
 - Check code for bugs, security issues, and best practices
 - Fact-check research findings
 - Provide structured feedback with specific improvement suggestions
 Be thorough but constructive. Use a pass/fail/needs-improvement verdict.`,
 
-  analyst: `You are a Data Analyst Worker in NEXUS OS. Your job is to:
+  analyst: `You are a Data Analyst Worker in Bunz. Your job is to:
 - Analyze data and extract insights
 - Perform calculations and statistical reasoning
 - Create structured analysis with clear conclusions
@@ -52,7 +52,7 @@ interface RoutingDecision {
   reasoning: string;
 }
 
-const BOSS_SYSTEM_PROMPT = `You are the NEXUS OS Boss Agent — the coordinator responsible for orchestrating worker agents to complete user tasks.
+const BOSS_SYSTEM_PROMPT = `You are the Bunz Boss Agent — the coordinator responsible for orchestrating worker agents to complete user tasks.
 
 AVAILABLE WORKERS:
 - researcher: Web research, data gathering, competitive analysis, fact-finding
@@ -285,7 +285,7 @@ export async function executeWorkflowRun(
     }
 
     // ── Step 3: Boss Agent synthesizes final output ────────────────────────
-    const synthesisPrompt = `You are the NEXUS OS Boss Agent. Workers have completed their tasks. Synthesize the results into a cohesive final output for the user.
+    const synthesisPrompt = `You are the Bunz Boss Agent. Workers have completed their tasks. Synthesize the results into a cohesive final output for the user.
 
 USER'S ORIGINAL REQUEST:
 ${userPrompt}
@@ -304,7 +304,7 @@ Provide a well-structured final response that combines all worker outputs into a
       startedAt: new Date().toISOString(),
     });
 
-    const synthesisResult = await runAgentChat(model, "You are the NEXUS OS Boss Agent synthesizer. Combine worker outputs into a polished final response.", [], synthesisPrompt);
+    const synthesisResult = await runAgentChat(model, "You are the Bunz Boss Agent synthesizer. Combine worker outputs into a polished final response.", [], synthesisPrompt);
     totalTokensUsed += synthesisResult.totalTokens;
 
     await storage.recordTokenUsage({
