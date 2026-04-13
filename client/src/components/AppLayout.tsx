@@ -1,5 +1,5 @@
 import { Link, useLocation } from "wouter";
-import { LayoutDashboard, GitBranch, Bot, ShieldCheck, CreditCard, Zap, BookOpen, Target } from "lucide-react";
+import { LayoutDashboard, GitBranch, Bot, ShieldCheck, CreditCard, Zap, BookOpen, Target, Settings } from "lucide-react";
 
 const navItems = [
   { href: "/", label: "Dashboard", icon: LayoutDashboard },
@@ -9,6 +9,7 @@ const navItems = [
   { href: "/journal", label: "Trade Journal", icon: BookOpen },
   { href: "/bot-challenge", label: "Bot Challenge", icon: Target },
   { href: "/pricing", label: "Pricing", icon: CreditCard },
+  { href: "/settings", label: "Settings", icon: Settings },
 ];
 
 function NexusLogo() {

@@ -610,6 +610,8 @@ const STATE_LABELS: Record<OrbState, string> = {
 // ─── Main Jarvis Widget ───────────────────────────────────────────────────────
 export function JarvisWidget() {
   const [open, setOpen] = useState(false);
+  const [visible, setVisible] = useState(false);
+  const [animIn, setAnimIn] = useState(false);
   const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState("");
   const [orbState, setOrbState] = useState<OrbState>("idle");
@@ -623,6 +625,18 @@ export function JarvisWidget() {
   const analyserRef = useRef<AnalyserNode | null>(null);
   const ampFrameRef = useRef<number>(0);
 
+  // Slide-up open / slide-down close
+  const openJarvis = useCallback(() => {
+    setOpen(true);
+    setVisible(true);
+    requestAnimationFrame(() => requestAnimationFrame(() => setAnimIn(true)));
+  }, []);
+
+  const closeJarvis = useCallback(() => {
+    setAnimIn(false);
+    setTimeout(() => { setVisible(false); setOpen(false); }, 380);
+  }, []);
+
   // Auto-scroll
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -633,13 +647,13 @@ export function JarvisWidget() {
     const handler = (e: KeyboardEvent) => {
       if ((e.ctrlKey || e.metaKey) && e.key === "j") {
         e.preventDefault();
-        setOpen((v) => !v);
+        if (open) closeJarvis(); else openJarvis();
       }
-      if (e.key === "Escape") setOpen(false);
+      if (e.key === "Escape" && open) closeJarvis();
     };
     window.addEventListener("keydown", handler);
     return () => window.removeEventListener("keydown", handler);
-  }, []);
+  }, [open, openJarvis, closeJarvis]);
 
   // Focus input when opened
   useEffect(() => {
@@ -755,15 +769,21 @@ export function JarvisWidget() {
   return (
     <>
       {/* ── Full-screen Overlay ── */}
-      {open && (
+      {visible && (
         <div
           className="fixed inset-0 z-[9999] flex flex-col"
-          style={{ background: "rgba(0,0,0,0.65)", backdropFilter: "blur(24px)", WebkitBackdropFilter: "blur(24px)" }}
+          style={{
+            background: "rgba(0,0,0,0.55)",
+            backdropFilter: "blur(28px)",
+            WebkitBackdropFilter: "blur(28px)",
+            transform: animIn ? "translateY(0)" : "translateY(100%)",
+            opacity: animIn ? 1 : 0,
+            transition: "transform 0.38s cubic-bezier(0.16, 1, 0.3, 1), opacity 0.3s ease",
+            willChange: "transform, opacity",
+          }}
         >
-          {/* Scanline overlay removed — it created a visible rectangular gap behind the Three.js canvas */}
-
           {/* Header */}
-          <div className="relative z-10 flex items-center justify-between px-6 py-4 border-b border-cyan-500/10">
+          <div className="relative z-10 flex items-center justify-between px-6 py-4 border-b border-white/10">
             <div className="flex items-center gap-3">
               <div className="w-2 h-2 rounded-full bg-cyan-400 animate-pulse" />
               <span className="text-cyan-400/60 text-xs font-mono tracking-[0.3em] uppercase">J.A.R.V.I.S.</span>
@@ -771,7 +791,7 @@ export function JarvisWidget() {
               <span className="text-cyan-400/40 text-xs tracking-widest" style={{ fontFamily: "'Inter', system-ui, sans-serif" }}>{STATE_LABELS[orbState]}</span>
             </div>
             <button
-              onClick={() => setOpen(false)}
+              onClick={closeJarvis}
               className="text-cyan-500/40 hover:text-cyan-400 transition-colors p-1"
             >
               <X size={18} />
@@ -868,7 +888,7 @@ export function JarvisWidget() {
       {/* ── Floating Pill Button ── */}
       {!open && (
         <button
-          onClick={() => setOpen(true)}
+          onClick={openJarvis}
           className="fixed bottom-5 right-5 z-[9998] group flex items-center gap-2 px-3 py-2 rounded-full transition-all duration-300"
           style={{
             background: "rgba(0,0,0,0.85)",

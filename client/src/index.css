@@ -102,9 +102,102 @@
   );
 }
 
-/* No .dark class needed — NEXUS is dark-only */
+/* TradingView-style Dark theme (default) */
 .dark {
-  /* Same as :root — this app is always dark */
+  --button-outline: rgba(255, 255, 255, 0.1);
+  --badge-outline: rgba(255, 255, 255, 0.05);
+  --elevate-1: rgba(255, 255, 255, 0.04);
+  --elevate-2: rgba(255, 255, 255, 0.09);
+
+  --background: 220 7% 8%;
+  --foreground: 220 9% 94%;
+  --border: 220 6% 18%;
+  --card: 220 7% 11%;
+  --card-foreground: 220 9% 94%;
+  --card-border: 220 6% 16%;
+  --sidebar: 220 7% 7%;
+  --sidebar-foreground: 220 9% 94%;
+  --sidebar-border: 220 6% 14%;
+  --sidebar-primary: 211 100% 50%;
+  --sidebar-primary-foreground: 0 0% 100%;
+  --sidebar-accent: 220 7% 14%;
+  --sidebar-accent-foreground: 220 9% 94%;
+  --sidebar-ring: 211 100% 50%;
+  --popover: 220 7% 10%;
+  --popover-foreground: 220 9% 94%;
+  --popover-border: 220 6% 18%;
+
+  --primary: 211 100% 50%;
+  --primary-foreground: 0 0% 100%;
+  --secondary: 220 7% 16%;
+  --secondary-foreground: 220 9% 94%;
+  --muted: 220 6% 14%;
+  --muted-foreground: 220 6% 55%;
+  --accent: 211 100% 50%;
+  --accent-foreground: 0 0% 100%;
+  --destructive: 0 72% 51%;
+  --destructive-foreground: 0 0% 100%;
+  --input: 220 6% 20%;
+  --ring: 211 100% 50%;
+
+  --chart-1: 211 100% 50%;
+  --chart-2: 160 60% 45%;
+  --chart-3: 43 74% 49%;
+  --chart-4: 0 72% 51%;
+  --chart-5: 280 65% 55%;
+
+  --glow: 211 100% 50%;
+  --success: 160 60% 45%;
+  --warning: 43 96% 56%;
+}
+
+/* TradingView-style Light theme */
+.light {
+  --button-outline: rgba(0, 0, 0, 0.08);
+  --badge-outline: rgba(0, 0, 0, 0.05);
+  --elevate-1: rgba(0, 0, 0, 0.03);
+  --elevate-2: rgba(0, 0, 0, 0.06);
+
+  --background: 0 0% 100%;
+  --foreground: 220 9% 12%;
+  --border: 220 9% 89%;
+  --card: 0 0% 100%;
+  --card-foreground: 220 9% 12%;
+  --card-border: 220 9% 89%;
+  --sidebar: 220 14% 96%;
+  --sidebar-foreground: 220 9% 12%;
+  --sidebar-border: 220 9% 89%;
+  --sidebar-primary: 211 100% 50%;
+  --sidebar-primary-foreground: 0 0% 100%;
+  --sidebar-accent: 220 14% 92%;
+  --sidebar-accent-foreground: 220 9% 12%;
+  --sidebar-ring: 211 100% 50%;
+  --popover: 0 0% 100%;
+  --popover-foreground: 220 9% 12%;
+  --popover-border: 220 9% 89%;
+
+  --primary: 211 100% 50%;
+  --primary-foreground: 0 0% 100%;
+  --secondary: 220 14% 96%;
+  --secondary-foreground: 220 9% 12%;
+  --muted: 220 14% 96%;
+  --muted-foreground: 220 6% 44%;
+  --accent: 211 100% 50%;
+  --accent-foreground: 0 0% 100%;
+  --destructive: 0 72% 51%;
+  --destructive-foreground: 0 0% 100%;
+  --input: 220 9% 89%;
+  --ring: 211 100% 50%;
+
+  --chart-1: 211 100% 50%;
+  --chart-2: 160 60% 45%;
+  --chart-3: 43 74% 49%;
+  --chart-4: 0 72% 51%;
+  --chart-5: 280 65% 55%;
+
+  --glow: 211 100% 50%;
+  --success: 160 60% 45%;
+  --warning: 43 96% 56%;
 }
 
 @layer base {
@@ -132,7 +225,7 @@
 
 /* Subtle gradient for cards on hover */
 .nexus-card-hover:hover {
-  background: linear-gradient(135deg, hsl(225 38% 10%) 0%, hsl(239 30% 12%) 100%);
+  background: hsl(var(--secondary));
 }
 
 /* Status pulse animation */
@@ -152,16 +245,16 @@
 }
 
 ::-webkit-scrollbar-track {
-  background: hsl(224 40% 6%);
+  background: hsl(var(--background));
 }
 
 ::-webkit-scrollbar-thumb {
-  background: hsl(225 20% 20%);
+  background: hsl(var(--border));
   border-radius: 3px;
 }
 
 ::-webkit-scrollbar-thumb:hover {
-  background: hsl(225 20% 28%);
+  background: hsl(var(--muted-foreground));
 }
 
 @layer utilities {

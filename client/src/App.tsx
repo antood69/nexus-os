@@ -14,8 +14,10 @@ import AuditPage from "@/pages/AuditPage";
 import PricingPage from "@/pages/PricingPage";
 import TradingJournalPage from "@/pages/TradingJournalPage";
 import BotChallengePage from "@/pages/BotChallengePage";
+import SettingsPage from "@/pages/SettingsPage";
 import AppLayout from "@/components/AppLayout";
 import JarvisWidget from "@/components/JarvisWidget";
+import { ThemeProvider } from "./contexts/ThemeContext";
 
 function AppRouter() {
   return (
@@ -31,6 +33,7 @@ function AppRouter() {
           <Route path="/pricing" component={PricingPage} />
           <Route path="/journal" component={TradingJournalPage} />
           <Route path="/bot-challenge" component={BotChallengePage} />
+          <Route path="/settings" component={SettingsPage} />
           <Route component={NotFound} />
         </Switch>
       </AppLayout>
@@ -41,14 +44,16 @@ function AppRouter() {
 
 function App() {
   return (
-    <QueryClientProvider client={queryClient}>
-      <TooltipProvider>
-        <Toaster />
-        <Router hook={useHashLocation}>
-          <AppRouter />
-        </Router>
-      </TooltipProvider>
-    </QueryClientProvider>
+    <ThemeProvider>
+      <QueryClientProvider client={queryClient}>
+        <TooltipProvider>
+          <Toaster />
+          <Router hook={useHashLocation}>
+            <AppRouter />
+          </Router>
+        </TooltipProvider>
+      </QueryClientProvider>
+    </ThemeProvider>
   );
 }
 
