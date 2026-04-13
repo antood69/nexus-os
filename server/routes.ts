@@ -557,6 +557,25 @@ Be concise, direct, and helpful. If asked to perform an action, explain what you
     }
   });
 
+  // === NOTIFICATIONS ===
+  app.get("/api/notifications", async (req, res) => {
+    const userId = req.user?.id || 1;
+    const notifs = await storage.getNotifications(userId, 50);
+    const unread = await storage.getUnreadNotificationCount(userId);
+    res.json({ notifications: notifs, unreadCount: unread });
+  });
+
+  app.post("/api/notifications/:id/read", async (req, res) => {
+    await storage.markNotificationRead(Number(req.params.id));
+    res.json({ ok: true });
+  });
+
+  app.post("/api/notifications/read-all", async (req, res) => {
+    const userId = req.user?.id || 1;
+    await storage.markAllNotificationsRead(userId);
+    res.json({ ok: true });
+  });
+
   // === STRIPE ===
   registerStripeRoutes(app);
 

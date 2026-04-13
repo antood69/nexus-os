@@ -92,6 +92,7 @@ export const users = sqliteTable("users", {
   authProvider: text("auth_provider").notNull().default("email"), // email | google | github
   providerId: text("provider_id"), // OAuth provider user ID
   role: text("role").notNull().default("user"), // user | admin | owner
+  emailVerified: integer("email_verified").notNull().default(0), // 0 | 1
   tier: text("tier").notNull().default("free"), // free | starter | pro | agency
   stripeCustomerId: text("stripe_customer_id"),
   subscriptionId: text("subscription_id"),
@@ -128,6 +129,30 @@ export const ownerIntelligence = sqliteTable("owner_intelligence", {
   createdAt: text("created_at").notNull().default(""),
 });
 export type OwnerIntelligence = typeof ownerIntelligence.$inferSelect;
+
+// Email Verification Tokens
+export const emailVerifications = sqliteTable("email_verifications", {
+  id: integer("id").primaryKey({ autoIncrement: true }),
+  userId: integer("user_id").notNull(),
+  token: text("token").notNull().unique(),
+  expiresAt: text("expires_at").notNull(),
+  verified: integer("verified").notNull().default(0), // 0 | 1
+  createdAt: text("created_at").notNull().default(""),
+});
+export type EmailVerification = typeof emailVerifications.$inferSelect;
+
+// In-App Notifications
+export const notifications = sqliteTable("notifications", {
+  id: integer("id").primaryKey({ autoIncrement: true }),
+  userId: integer("user_id").notNull(),
+  type: text("type").notNull(), // login_alert | verification | workflow_complete | system | welcome
+  title: text("title").notNull(),
+  message: text("message").notNull(),
+  link: text("link"), // optional deep link within the app
+  read: integer("read").notNull().default(0), // 0 | 1
+  createdAt: text("created_at").notNull().default(""),
+});
+export type Notification = typeof notifications.$inferSelect;
 
 // Escalations — agent watchdog escalation records
 export const escalations = sqliteTable("escalations", {

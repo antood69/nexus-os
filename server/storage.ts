@@ -16,6 +16,8 @@ import {
   type WorkflowVersion, type InsertWorkflowVersion, workflowVersions,
   type Session, sessions,
   type OwnerIntelligence, ownerIntelligence,
+  type EmailVerification, emailVerifications,
+  type Notification, notifications,
 } from "@shared/schema";
 import { drizzle } from "drizzle-orm/better-sqlite3";
 import Database from "better-sqlite3";
@@ -46,6 +48,24 @@ sqlite.exec(`
     id TEXT PRIMARY KEY,
     user_id INTEGER NOT NULL,
     expires_at TEXT NOT NULL,
+    created_at TEXT NOT NULL DEFAULT ''
+  );
+  CREATE TABLE IF NOT EXISTS email_verifications (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    user_id INTEGER NOT NULL,
+    token TEXT NOT NULL UNIQUE,
+    expires_at TEXT NOT NULL,
+    verified INTEGER NOT NULL DEFAULT 0,
+    created_at TEXT NOT NULL DEFAULT ''
+  );
+  CREATE TABLE IF NOT EXISTS notifications (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    user_id INTEGER NOT NULL,
+    type TEXT NOT NULL,
+    title TEXT NOT NULL,
+    message TEXT NOT NULL,
+    link TEXT,
+    read INTEGER NOT NULL DEFAULT 0,
     created_at TEXT NOT NULL DEFAULT ''
   );
   CREATE TABLE IF NOT EXISTS owner_intelligence (
@@ -240,6 +260,7 @@ safeAlter("ALTER TABLE users ADD COLUMN avatar_url TEXT");
 safeAlter("ALTER TABLE users ADD COLUMN auth_provider TEXT NOT NULL DEFAULT 'email'");
 safeAlter("ALTER TABLE users ADD COLUMN provider_id TEXT");
 safeAlter("ALTER TABLE users ADD COLUMN role TEXT NOT NULL DEFAULT 'user'");
+safeAlter("ALTER TABLE users ADD COLUMN email_verified INTEGER NOT NULL DEFAULT 0");
 safeAlter("ALTER TABLE users ADD COLUMN last_login_at TEXT");
 safeAlter("ALTER TABLE users ADD COLUMN created_at TEXT NOT NULL DEFAULT ''");
 // Workflows table migration
@@ -338,6 +359,16 @@ export interface IStorage {
   getIntelligence(opts: { limit?: number; offset?: number; eventType?: string; userId?: number; quality?: string }): Promise<OwnerIntelligence[]>;
   getIntelligenceCount(): Promise<number>;
   updateIntelligenceQuality(id: number, quality: string): Promise<void>;
+  // Email Verification
+  createEmailVerification(userId: number, token: string, expiresAt: string): Promise<EmailVerification>;
+  getEmailVerification(token: string): Promise<EmailVerification | undefined>;
+  markEmailVerified(token: string): Promise<void>;
+  // Notifications
+  createNotification(data: { userId: number; type: string; title: string; message: string; link?: string }): Promise<Notification>;
+  getNotifications(userId: number, limit?: number): Promise<Notification[]>;
+  getUnreadNotificationCount(userId: number): Promise<number>;
+  markNotificationRead(id: number): Promise<void>;
+  markAllNotificationsRead(userId: number): Promise<void>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -595,6 +626,39 @@ export class DatabaseStorage implements IStorage {
   }
   async updateIntelligenceQuality(id: number, quality: string) {
     sqlite.prepare('UPDATE owner_intelligence SET quality = ? WHERE id = ?').run(quality, id);
+  }
+
+  // Email Verification
+  async createEmailVerification(userId: number, token: string, expiresAt: string) {
+    return db.insert(emailVerifications).values({ userId, token, expiresAt, createdAt: new Date().toISOString() }).returning().get();
+  }
+  async getEmailVerification(token: string) {
+    return db.select().from(emailVerifications).where(eq(emailVerifications.token, token)).get();
+  }
+  async markEmailVerified(token: string) {
+    const v = await this.getEmailVerification(token);
+    if (v) {
+      sqlite.prepare('UPDATE email_verifications SET verified = 1 WHERE token = ?').run(token);
+      sqlite.prepare('UPDATE users SET email_verified = 1 WHERE id = ?').run(v.userId);
+    }
+  }
+
+  // Notifications
+  async createNotification(data: { userId: number; type: string; title: string; message: string; link?: string }) {
+    return db.insert(notifications).values({ ...data, createdAt: new Date().toISOString() } as any).returning().get();
+  }
+  async getNotifications(userId: number, limit = 50) {
+    return db.select().from(notifications).where(eq(notifications.userId, userId)).orderBy(desc(notifications.id)).limit(limit).all();
+  }
+  async getUnreadNotificationCount(userId: number) {
+    const row = sqlite.prepare('SELECT COUNT(*) as count FROM notifications WHERE user_id = ? AND read = 0').get(userId) as any;
+    return row?.count || 0;
+  }
+  async markNotificationRead(id: number) {
+    sqlite.prepare('UPDATE notifications SET read = 1 WHERE id = ?').run(id);
+  }
+  async markAllNotificationsRead(userId: number) {
+    sqlite.prepare('UPDATE notifications SET read = 1 WHERE user_id = ?').run(userId);
   }
 }
 

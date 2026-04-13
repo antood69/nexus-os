@@ -14,6 +14,7 @@ import {
   ShieldAlert,
 } from "lucide-react";
 import TokenCounter from "./TokenCounter";
+import NotificationBell from "./NotificationBell";
 import { useAuth } from "@/hooks/useAuth";
 import { useEffect } from "react";
 
@@ -173,9 +174,18 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
       </aside>
 
       {/* Main content */}
-      <main className="flex-1 overflow-y-auto overscroll-contain">
-        {children}
-      </main>
+      <div className="flex-1 flex flex-col overflow-hidden">
+        {/* Top bar with notification bell */}
+        <div className="h-12 border-b border-border bg-card flex items-center justify-end px-4 gap-3 shrink-0">
+          <NotificationBell />
+          <div className="w-7 h-7 rounded-full bg-primary/20 flex items-center justify-center text-xs font-semibold text-primary">
+            {(user?.displayName || user?.email || "U").charAt(0).toUpperCase()}
+          </div>
+        </div>
+        <main className="flex-1 overflow-y-auto overscroll-contain">
+          {children}
+        </main>
+      </div>
     </div>
   );
 }

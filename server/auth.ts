@@ -2,6 +2,7 @@ import { Router, Request, Response, NextFunction } from "express";
 import bcrypt from "bcryptjs";
 import { v4 as uuidv4 } from "uuid";
 import { storage } from "./storage";
+import { sendVerificationEmail, sendLoginAlertEmail, sendWelcomeEmail } from "./email";
 
 const OWNER_EMAIL = "reederb46@gmail.com";
 const SESSION_DURATION_MS = 30 * 24 * 60 * 60 * 1000; // 30 days
@@ -149,6 +150,13 @@ export function createAuthRouter(): Router {
       periodEnd: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString(),
     });
 
+    // Send verification email (owner auto-verified)
+    if (isOwner) {
+      await storage.updateUser(user.id, { emailVerified: 1 } as any);
+    } else {
+      sendVerificationEmail(user.id, user.email, displayName || email.split("@")[0]);
+    }
+
     const sessionId = await createUserSession(user.id);
     res.cookie(COOKIE_NAME, sessionId, {
       httpOnly: true,
@@ -156,6 +164,14 @@ export function createAuthRouter(): Router {
       sameSite: "lax",
       maxAge: SESSION_DURATION_MS,
       path: "/",
+    });
+
+    // Welcome notification
+    await storage.createNotification({
+      userId: user.id,
+      type: "welcome",
+      title: "Welcome to NEXUS OS",
+      message: "Your account has been created. Check your email to verify your address.",
     });
 
     res.status(201).json({
@@ -166,6 +182,7 @@ export function createAuthRouter(): Router {
       role: user.role,
       tier: user.tier,
       avatarUrl: user.avatarUrl,
+      emailVerified: isOwner ? 1 : 0,
     });
   });
 
@@ -189,6 +206,10 @@ export function createAuthRouter(): Router {
     // Update last login
     await storage.updateUser(user.id, { lastLoginAt: new Date().toISOString() } as any);
 
+    // Send login alert email + in-app notification
+    const ipAddress = req.headers["x-forwarded-for"] as string || req.socket.remoteAddress || "Unknown";
+    sendLoginAlertEmail(user.id, user.email, user.displayName || user.username, ipAddress);
+
     const sessionId = await createUserSession(user.id);
     res.cookie(COOKIE_NAME, sessionId, {
       httpOnly: true,
@@ -206,6 +227,7 @@ export function createAuthRouter(): Router {
       role: user.role,
       tier: user.tier,
       avatarUrl: user.avatarUrl,
+      emailVerified: user.emailVerified,
     });
   });
 
@@ -242,7 +264,59 @@ export function createAuthRouter(): Router {
       role: user.role,
       tier: user.tier,
       avatarUrl: user.avatarUrl,
+      emailVerified: user.emailVerified,
     });
+  });
+
+  // ── Email Verification ───────────────────────────────────────────────────
+  router.get("/verify-email", async (req: Request, res: Response) => {
+    const { token } = req.query;
+    if (!token || typeof token !== "string") {
+      return res.redirect("/#/login?error=invalid_token");
+    }
+
+    const verification = await storage.getEmailVerification(token);
+    if (!verification) {
+      return res.redirect("/#/login?error=invalid_token");
+    }
+    if (verification.verified) {
+      return res.redirect("/#/login?verified=already");
+    }
+    if (new Date(verification.expiresAt) < new Date()) {
+      return res.redirect("/#/login?error=token_expired");
+    }
+
+    await storage.markEmailVerified(token);
+
+    // Send welcome email
+    const user = await storage.getUser(verification.userId);
+    if (user) {
+      sendWelcomeEmail(user.email, user.displayName || user.username);
+      await storage.createNotification({
+        userId: user.id,
+        type: "system",
+        title: "Email verified",
+        message: "Your email has been verified. Your account is now fully active.",
+      });
+    }
+
+    res.redirect("/#/login?verified=true");
+  });
+
+  // Resend verification email
+  router.post("/resend-verification", async (req: Request, res: Response) => {
+    const sessionId = req.cookies?.[COOKIE_NAME];
+    if (!sessionId) return res.status(401).json({ error: "Not authenticated" });
+
+    const session = await storage.getSession(sessionId);
+    if (!session) return res.status(401).json({ error: "Not authenticated" });
+
+    const user = await storage.getUser(session.userId);
+    if (!user) return res.status(404).json({ error: "User not found" });
+    if (user.emailVerified) return res.json({ ok: true, message: "Already verified" });
+
+    await sendVerificationEmail(user.id, user.email, user.displayName || user.username);
+    res.json({ ok: true, message: "Verification email sent" });
   });
 
   // ── GitHub OAuth ─────────────────────────────────────────────────────────
@@ -301,6 +375,7 @@ export function createAuthRouter(): Router {
           avatarUrl: ghUser.avatar_url,
           authProvider: "github",
           providerId: String(ghUser.id),
+          emailVerified: 1, // OAuth providers verify email
           role: isOwner ? "owner" : "user",
           tier: isOwner ? "agency" : "free",
         } as any);
@@ -312,11 +387,21 @@ export function createAuthRouter(): Router {
           periodStart: new Date().toISOString(),
           periodEnd: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString(),
         });
+        // Welcome notification for new OAuth users
+        await storage.createNotification({
+          userId: user.id,
+          type: "welcome",
+          title: "Welcome to NEXUS OS",
+          message: "Your account has been created via GitHub. You're all set.",
+        });
       } else {
         await storage.updateUser(user.id, {
           avatarUrl: ghUser.avatar_url,
           lastLoginAt: new Date().toISOString(),
         } as any);
+        // Login alert for existing users
+        const ip = req.headers["x-forwarded-for"] as string || req.socket.remoteAddress || "Unknown";
+        sendLoginAlertEmail(user.id, user.email, user.displayName || user.username, ip);
       }
 
       const sessionId = await createUserSession(user.id);
@@ -383,6 +468,7 @@ export function createAuthRouter(): Router {
           avatarUrl: gUser.picture,
           authProvider: "google",
           providerId: gUser.id,
+          emailVerified: 1,
           role: isOwner ? "owner" : "user",
           tier: isOwner ? "agency" : "free",
         } as any);
@@ -394,11 +480,19 @@ export function createAuthRouter(): Router {
           periodStart: new Date().toISOString(),
           periodEnd: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString(),
         });
+        await storage.createNotification({
+          userId: user.id,
+          type: "welcome",
+          title: "Welcome to NEXUS OS",
+          message: "Your account has been created via Google. You're all set.",
+        });
       } else {
         await storage.updateUser(user.id, {
           avatarUrl: gUser.picture,
           lastLoginAt: new Date().toISOString(),
         } as any);
+        const ip = req.headers["x-forwarded-for"] as string || req.socket.remoteAddress || "Unknown";
+        sendLoginAlertEmail(user.id, user.email, user.displayName || user.username, ip);
       }
 
       const sessionId = await createUserSession(user.id);
