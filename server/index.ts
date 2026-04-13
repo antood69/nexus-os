@@ -59,46 +59,21 @@ app.use((req, res, next) => {
   next();
 });
 
-// Export a ready promise so the serverless handler can await initialization
-let _initialized = false;
-let _initPromise: Promise<void> | null = null;
+(async () => {
+  await registerRoutes(httpServer, app);
 
-export function getInitPromise(): Promise<void> {
-  if (!_initPromise) {
-    _initPromise = (async () => {
-      await registerRoutes(httpServer, app);
+  app.use((err: any, _req: Request, res: Response, next: NextFunction) => {
+    const status = err.status || err.statusCode || 500;
+    const message = err.message || "Internal Server Error";
+    console.error("Internal Server Error:", err);
+    if (res.headersSent) return next(err);
+    return res.status(status).json({ message });
+  });
 
-      app.use((err: any, _req: Request, res: Response, next: NextFunction) => {
-        const status = err.status || err.statusCode || 500;
-        const message = err.message || "Internal Server Error";
-        console.error("Internal Server Error:", err);
-        if (res.headersSent) return next(err);
-        return res.status(status).json({ message });
-      });
+  serveStatic(app);
 
-      serveStatic(app);
-      _initialized = true;
-    })();
-  }
-  return _initPromise;
-}
-
-// Export app for serverless use
-export { app };
-
-// Only listen when running directly (not serverless)
-if (process.env.VERCEL !== "1") {
-  (async () => {
-    await getInitPromise();
-
-    if (process.env.NODE_ENV !== "production") {
-      const { setupVite } = await import("./vite");
-      await setupVite(httpServer, app);
-    }
-
-    const port = parseInt(process.env.PORT || "5000", 10);
-    httpServer.listen({ port, host: "0.0.0.0", reusePort: true }, () => {
-      log(`serving on port ${port}`);
-    });
-  })();
-}
+  const port = parseInt(process.env.PORT || "3000", 10);
+  httpServer.listen({ port, host: "0.0.0.0", reusePort: true }, () => {
+    log(`serving on port ${port}`);
+  });
+})();
