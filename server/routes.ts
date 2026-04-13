@@ -144,6 +144,9 @@ export async function registerRoutes(
         totalTokens,
         endpoint: "agent_chat",
       });
+      // Increment plan usage
+      const plan = await storage.getUserPlan(1);
+      if (plan) await storage.updateUserPlan(plan.id, { tokensUsed: plan.tokensUsed + totalTokens });
 
       const assistantMsg = await storage.createMessage({ agentId, role: "assistant", content: reply });
       return res.status(201).json({ userMessage: userMsg, assistantMessage: assistantMsg });
@@ -264,6 +267,9 @@ Be concise, direct, and helpful. If asked to perform an action, explain what you
         totalTokens,
         endpoint: "jarvis",
       });
+      // Increment plan usage
+      const jPlan = await storage.getUserPlan(1);
+      if (jPlan) await storage.updateUserPlan(jPlan.id, { tokensUsed: jPlan.tokensUsed + totalTokens });
 
       res.json({ reply });
     } catch (err: any) {
