@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { useMutation } from "@tanstack/react-query";
-import { Store, DollarSign } from "lucide-react";
+import { Store, DollarSign, AlertTriangle } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
@@ -15,6 +15,12 @@ interface SellOnMarketplaceProps {
   onSuccess?: () => void;
 }
 
+function mapListingTypeToCategory(listingType: string): string {
+  if (listingType === "bot") return "agent";
+  if (listingType === "code") return "tool";
+  return "workflow";
+}
+
 export default function SellOnMarketplace({ itemName, itemDescription, listingType, attachedItemId, attachedItemData, onSuccess }: SellOnMarketplaceProps) {
   const [open, setOpen] = useState(false);
   const [title, setTitle] = useState(itemName);
@@ -23,15 +29,16 @@ export default function SellOnMarketplace({ itemName, itemDescription, listingTy
 
   const sellMutation = useMutation({
     mutationFn: async () => {
-      const res = await apiRequest("POST", "/api/marketplace/sell-item", {
+      const res = await apiRequest("POST", "/api/marketplace/listings", {
         title,
         description,
-        price: parseFloat(price),
+        shortDescription: description.slice(0, 120),
+        priceUsd: parseFloat(price) || 0,
         priceType: parseFloat(price) === 0 ? "free" : "one_time",
-        category: listingType === "bot" ? "agent" : listingType === "code" ? "tool" : "workflow",
+        category: mapListingTypeToCategory(listingType),
         listingType,
-        attachedItemId,
-        attachedItemData,
+        isPublished: true,
+        contentRef: (attachedItemId || attachedItemData) ? { attachedItemId, attachedItemData } : undefined,
       });
       return res.json();
     },
@@ -57,6 +64,17 @@ export default function SellOnMarketplace({ itemName, itemDescription, listingTy
           <Store className="w-5 h-5 text-primary" />
           <h3 className="text-base font-semibold">Sell on Marketplace</h3>
         </div>
+
+        {/* Error state */}
+        {sellMutation.isError && (
+          <div className="flex items-center gap-2 p-3 mb-3 rounded-lg border border-red-500/20 bg-red-500/5">
+            <AlertTriangle className="w-4 h-4 text-red-400 flex-shrink-0" />
+            <p className="text-xs text-red-400">
+              {sellMutation.error instanceof Error ? sellMutation.error.message : "Failed to create listing. Please try again."}
+            </p>
+          </div>
+        )}
+
         <div className="space-y-3">
           <div>
             <label className="text-xs font-medium text-muted-foreground mb-1 block">Title</label>

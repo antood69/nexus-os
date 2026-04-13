@@ -5,10 +5,30 @@ import { stripe } from "./stripe";
 
 const PLATFORM_FEE_RATE = 0.20; // 20% platform fee
 
+function noCacheHeaders(res: Response) {
+  res.set("Cache-Control", "no-store, no-cache, must-revalidate");
+  res.set("Pragma", "no-cache");
+  res.set("Expires", "0");
+}
+
+function requireAuth(req: Request, res: Response, next: () => void) {
+  if (!req.user) {
+    noCacheHeaders(res);
+    return res.status(401).json({ error: "Not authenticated" });
+  }
+  next();
+}
+
 export function createMarketplaceRouter(): Router {
   const router = Router();
 
-  // ── PUBLIC ROUTES ────────────────────────────────────────────────────────────
+  // ── HEALTH CHECK ──────────────────────────────────────────────────────────
+  router.get("/health", (_req: Request, res: Response) => {
+    noCacheHeaders(res);
+    res.json({ ok: true });
+  });
+
+  // ── PUBLIC ROUTES ─────────────────────────────────────────────────────────
 
   // GET /api/marketplace/listings — browse with filters
   router.get("/listings", async (req: Request, res: Response) => {
@@ -32,9 +52,11 @@ export function createMarketplaceRouter(): Router {
         offset: offset ? parseInt(offset) : 0,
       });
 
+      noCacheHeaders(res);
       res.json({ listings, total: listings.length });
     } catch (err: any) {
       console.error("[marketplace] GET /listings error:", err.message);
+      noCacheHeaders(res);
       res.status(500).json({ error: err.message });
     }
   });
@@ -44,12 +66,15 @@ export function createMarketplaceRouter(): Router {
     try {
       const listing = await storage.getListing(req.params.id);
       if (!listing || !listing.isPublished) {
+        noCacheHeaders(res);
         return res.status(404).json({ error: "Listing not found" });
       }
       const reviews = await storage.getReviewsByListing(listing.id, 10, 0);
+      noCacheHeaders(res);
       res.json({ listing, reviews });
     } catch (err: any) {
       console.error("[marketplace] GET /listings/:id error:", err.message);
+      noCacheHeaders(res);
       res.status(500).json({ error: err.message });
     }
   });
@@ -60,15 +85,20 @@ export function createMarketplaceRouter(): Router {
       const limit = req.query.limit as string | undefined;
       const offset = req.query.offset as string | undefined;
       const listing = await storage.getListing(req.params.id);
-      if (!listing) return res.status(404).json({ error: "Listing not found" });
+      if (!listing) {
+        noCacheHeaders(res);
+        return res.status(404).json({ error: "Listing not found" });
+      }
       const reviews = await storage.getReviewsByListing(
         req.params.id,
         limit ? parseInt(limit) : 20,
         offset ? parseInt(offset) : 0
       );
+      noCacheHeaders(res);
       res.json({ reviews });
     } catch (err: any) {
       console.error("[marketplace] GET /listings/:id/reviews error:", err.message);
+      noCacheHeaders(res);
       res.status(500).json({ error: err.message });
     }
   });
@@ -78,9 +108,11 @@ export function createMarketplaceRouter(): Router {
     try {
       const limit = req.query.limit as string | undefined;
       const listings = await storage.getFeaturedListings(limit ? parseInt(limit) : 10);
+      noCacheHeaders(res);
       res.json({ listings });
     } catch (err: any) {
       console.error("[marketplace] GET /featured error:", err.message);
+      noCacheHeaders(res);
       res.status(500).json({ error: err.message });
     }
   });
@@ -90,9 +122,11 @@ export function createMarketplaceRouter(): Router {
     try {
       const limit = req.query.limit as string | undefined;
       const listings = await storage.getTrendingListings(limit ? parseInt(limit) : 10);
+      noCacheHeaders(res);
       res.json({ listings });
     } catch (err: any) {
       console.error("[marketplace] GET /trending error:", err.message);
+      noCacheHeaders(res);
       res.status(500).json({ error: err.message });
     }
   });
@@ -105,14 +139,16 @@ export function createMarketplaceRouter(): Router {
       const countMap: Record<string, number> = {};
       for (const c of counts) countMap[c.category] = c.count;
       const categories = all.map(cat => ({ category: cat, count: countMap[cat] || 0 }));
+      noCacheHeaders(res);
       res.json({ categories });
     } catch (err: any) {
       console.error("[marketplace] GET /categories error:", err.message);
+      noCacheHeaders(res);
       res.status(500).json({ error: err.message });
     }
   });
 
-  // ── AUTHENTICATED ROUTES ─────────────────────────────────────────────────────
+  // ── AUTHENTICATED ROUTES ──────────────────────────────────────────────────
 
   // POST /api/marketplace/listings — create listing
   router.post("/listings", requireAuth, async (req: Request, res: Response) => {
@@ -131,21 +167,32 @@ export function createMarketplaceRouter(): Router {
         isPublished,
         previewImages,
         tags,
+        attachedItemId,
+        attachedItemData,
       } = req.body;
 
       if (!title || !description || !category) {
+        noCacheHeaders(res);
         return res.status(400).json({ error: "title, description, and category are required" });
       }
 
       const validCategories = ["workflow", "agent", "tool", "prompt_pack", "theme"];
       if (!validCategories.includes(category)) {
+        noCacheHeaders(res);
         return res.status(400).json({ error: `category must be one of: ${validCategories.join(", ")}` });
       }
 
       const validPriceTypes = ["one_time", "monthly", "free"];
       const resolvedPriceType = priceType || ((!priceUsd || priceUsd === 0) ? "free" : "one_time");
       if (!validPriceTypes.includes(resolvedPriceType)) {
+        noCacheHeaders(res);
         return res.status(400).json({ error: `priceType must be one of: ${validPriceTypes.join(", ")}` });
+      }
+
+      // Build contentRef from attachedItemId/Data if provided
+      let resolvedContentRef = contentRef ? JSON.stringify(contentRef) : null;
+      if (!resolvedContentRef && (attachedItemId || attachedItemData)) {
+        resolvedContentRef = JSON.stringify({ attachedItemId, attachedItemData });
       }
 
       const listing = await storage.createListing({
@@ -157,7 +204,7 @@ export function createMarketplaceRouter(): Router {
         listingType: listingType || "standalone",
         priceUsd: priceUsd ?? 0,
         priceType: resolvedPriceType,
-        contentRef: contentRef ? JSON.stringify(contentRef) : null,
+        contentRef: resolvedContentRef,
         version: version || "1.0.0",
         isPublished: isPublished ? 1 : 0,
         isVerified: 0,
@@ -165,9 +212,54 @@ export function createMarketplaceRouter(): Router {
         tags: tags ? JSON.stringify(tags) : null,
       });
 
+      noCacheHeaders(res);
       res.status(201).json({ listing });
     } catch (err: any) {
       console.error("[marketplace] POST /listings error:", err.message);
+      noCacheHeaders(res);
+      res.status(500).json({ error: err.message });
+    }
+  });
+
+  // POST /api/marketplace/sell-item — alias for POST /listings (used by SellOnMarketplace component)
+  router.post("/sell-item", requireAuth, async (req: Request, res: Response) => {
+    try {
+      const user = req.user!;
+      const { title, description, price, priceType, category, listingType, attachedItemId, attachedItemData } = req.body;
+
+      if (!title || !description || !category) {
+        noCacheHeaders(res);
+        return res.status(400).json({ error: "title, description, and category are required" });
+      }
+
+      const resolvedPriceType = priceType || ((price === 0 || !price) ? "free" : "one_time");
+      let contentRef = null;
+      if (attachedItemId || attachedItemData) {
+        contentRef = JSON.stringify({ attachedItemId, attachedItemData });
+      }
+
+      const listing = await storage.createListing({
+        sellerId: user.id,
+        title,
+        description,
+        shortDescription: null,
+        category,
+        listingType: listingType || "standalone",
+        priceUsd: price ?? 0,
+        priceType: resolvedPriceType,
+        contentRef,
+        version: "1.0.0",
+        isPublished: 1,
+        isVerified: 0,
+        previewImages: null,
+        tags: null,
+      });
+
+      noCacheHeaders(res);
+      res.status(201).json({ listing });
+    } catch (err: any) {
+      console.error("[marketplace] POST /sell-item error:", err.message);
+      noCacheHeaders(res);
       res.status(500).json({ error: err.message });
     }
   });
@@ -177,8 +269,12 @@ export function createMarketplaceRouter(): Router {
     try {
       const user = req.user!;
       const listing = await storage.getListing(req.params.id);
-      if (!listing) return res.status(404).json({ error: "Listing not found" });
+      if (!listing) {
+        noCacheHeaders(res);
+        return res.status(404).json({ error: "Listing not found" });
+      }
       if (listing.sellerId !== user.id && user.role !== "owner" && user.role !== "admin") {
+        noCacheHeaders(res);
         return res.status(403).json({ error: "Not authorized to edit this listing" });
       }
 
@@ -201,9 +297,11 @@ export function createMarketplaceRouter(): Router {
       }
 
       const updated = await storage.updateListing(req.params.id, updates);
+      noCacheHeaders(res);
       res.json({ listing: updated });
     } catch (err: any) {
       console.error("[marketplace] PUT /listings/:id error:", err.message);
+      noCacheHeaders(res);
       res.status(500).json({ error: err.message });
     }
   });
@@ -213,20 +311,26 @@ export function createMarketplaceRouter(): Router {
     try {
       const user = req.user!;
       const listing = await storage.getListing(req.params.id);
-      if (!listing) return res.status(404).json({ error: "Listing not found" });
+      if (!listing) {
+        noCacheHeaders(res);
+        return res.status(404).json({ error: "Listing not found" });
+      }
       if (listing.sellerId !== user.id && user.role !== "owner" && user.role !== "admin") {
+        noCacheHeaders(res);
         return res.status(403).json({ error: "Not authorized to delete this listing" });
       }
-      // Check for purchases
       const purchases = await storage.getPurchasesBySeller(listing.sellerId);
       const hasPurchasesForListing = purchases.some(p => p.listingId === listing.id);
       if (hasPurchasesForListing) {
+        noCacheHeaders(res);
         return res.status(409).json({ error: "Cannot delete a listing that has been purchased" });
       }
       await storage.deleteListing(req.params.id);
+      noCacheHeaders(res);
       res.status(204).end();
     } catch (err: any) {
       console.error("[marketplace] DELETE /listings/:id error:", err.message);
+      noCacheHeaders(res);
       res.status(500).json({ error: err.message });
     }
   });
@@ -237,14 +341,16 @@ export function createMarketplaceRouter(): Router {
       const user = req.user!;
       const listing = await storage.getListing(req.params.id);
       if (!listing || !listing.isPublished) {
+        noCacheHeaders(res);
         return res.status(404).json({ error: "Listing not found" });
       }
       if (listing.priceUsd > 0 && listing.priceType !== "free") {
+        noCacheHeaders(res);
         return res.status(400).json({ error: "This listing is not free. Use /purchase instead." });
       }
-      // Prevent double-install
       const already = await storage.hasPurchased(user.id, listing.id);
       if (already) {
+        noCacheHeaders(res);
         return res.status(409).json({ error: "Already installed" });
       }
       const purchase = await storage.createPurchase({
@@ -258,9 +364,11 @@ export function createMarketplaceRouter(): Router {
         stripeTransferId: null,
       });
       await storage.incrementInstallCount(listing.id);
+      noCacheHeaders(res);
       res.status(201).json({ purchase });
     } catch (err: any) {
       console.error("[marketplace] POST /listings/:id/install error:", err.message);
+      noCacheHeaders(res);
       res.status(500).json({ error: err.message });
     }
   });
@@ -271,13 +379,16 @@ export function createMarketplaceRouter(): Router {
       const user = req.user!;
       const listing = await storage.getListing(req.params.id);
       if (!listing || !listing.isPublished) {
+        noCacheHeaders(res);
         return res.status(404).json({ error: "Listing not found" });
       }
       if (listing.priceUsd <= 0 || listing.priceType === "free") {
+        noCacheHeaders(res);
         return res.status(400).json({ error: "This listing is free. Use /install instead." });
       }
       const already = await storage.hasPurchased(user.id, listing.id);
       if (already) {
+        noCacheHeaders(res);
         return res.status(409).json({ error: "Already purchased" });
       }
 
@@ -313,13 +424,16 @@ export function createMarketplaceRouter(): Router {
           },
         });
 
+        noCacheHeaders(res);
         res.json({ url: session.url, sessionId: session.id });
       } catch (stripeErr: any) {
         console.error("[marketplace] Stripe checkout error:", stripeErr.message);
+        noCacheHeaders(res);
         res.status(500).json({ error: stripeErr.message });
       }
     } catch (err: any) {
       console.error("[marketplace] POST /listings/:id/purchase error:", err.message);
+      noCacheHeaders(res);
       res.status(500).json({ error: err.message });
     }
   });
@@ -329,28 +443,34 @@ export function createMarketplaceRouter(): Router {
     try {
       const user = req.user!;
       const listing = await storage.getListing(req.params.id);
-      if (!listing) return res.status(404).json({ error: "Listing not found" });
+      if (!listing) {
+        noCacheHeaders(res);
+        return res.status(404).json({ error: "Listing not found" });
+      }
 
-      // Must have purchased
       const purchased = await storage.hasPurchased(user.id, listing.id);
       if (!purchased) {
+        noCacheHeaders(res);
         return res.status(403).json({ error: "You must purchase this listing before reviewing it" });
       }
-      // 1 review per listing per user
       const existing = await storage.getReviewByBuyerAndListing(user.id, listing.id);
       if (existing) {
+        noCacheHeaders(res);
         return res.status(409).json({ error: "You have already reviewed this listing" });
       }
 
       const { rating, reviewText } = req.body;
       if (!rating || typeof rating !== "number" || rating < 1 || rating > 5) {
+        noCacheHeaders(res);
         return res.status(400).json({ error: "rating must be a number between 1 and 5" });
       }
 
-      // Get the purchase ID
       const purchases = await storage.getPurchasesByBuyer(user.id);
       const purchase = purchases.find(p => p.listingId === listing.id);
-      if (!purchase) return res.status(400).json({ error: "Purchase record not found" });
+      if (!purchase) {
+        noCacheHeaders(res);
+        return res.status(400).json({ error: "Purchase record not found" });
+      }
 
       const review = await storage.createReview({
         listingId: listing.id,
@@ -361,9 +481,11 @@ export function createMarketplaceRouter(): Router {
         isVerifiedPurchase: 1,
       });
 
+      noCacheHeaders(res);
       res.status(201).json({ review });
     } catch (err: any) {
       console.error("[marketplace] POST /listings/:id/reviews error:", err.message);
+      noCacheHeaders(res);
       res.status(500).json({ error: err.message });
     }
   });
@@ -373,7 +495,6 @@ export function createMarketplaceRouter(): Router {
     try {
       const user = req.user!;
       const listings = await storage.getListingsBySeller(user.id);
-      // Attach basic stats per listing
       const withStats = await Promise.all(listings.map(async l => {
         const purchases = await storage.getPurchasesBySeller(user.id);
         const listingPurchases = purchases.filter(p => p.listingId === l.id);
@@ -383,9 +504,11 @@ export function createMarketplaceRouter(): Router {
           revenue: listingPurchases.reduce((sum, p) => sum + p.sellerPayoutUsd, 0),
         };
       }));
+      noCacheHeaders(res);
       res.json({ listings: withStats });
     } catch (err: any) {
       console.error("[marketplace] GET /my/listings error:", err.message);
+      noCacheHeaders(res);
       res.status(500).json({ error: err.message });
     }
   });
@@ -395,14 +518,15 @@ export function createMarketplaceRouter(): Router {
     try {
       const user = req.user!;
       const purchases = await storage.getPurchasesByBuyer(user.id);
-      // Enrich with listing title
       const enriched = await Promise.all(purchases.map(async p => {
         const listing = await storage.getListing(p.listingId);
         return { ...p, listing: listing ? { id: listing.id, title: listing.title, category: listing.category } : null };
       }));
+      noCacheHeaders(res);
       res.json({ purchases: enriched });
     } catch (err: any) {
       console.error("[marketplace] GET /my/purchases error:", err.message);
+      noCacheHeaders(res);
       res.status(500).json({ error: err.message });
     }
   });
@@ -415,11 +539,11 @@ export function createMarketplaceRouter(): Router {
       const totalRevenue = sales.reduce((sum, s) => sum + s.sellerPayoutUsd, 0);
       const totalGross = sales.reduce((sum, s) => sum + s.amountUsd, 0);
       const totalFees = sales.reduce((sum, s) => sum + s.platformFeeUsd, 0);
-      // Enrich with listing info
       const enriched = await Promise.all(sales.map(async s => {
         const listing = await storage.getListing(s.listingId);
         return { ...s, listing: listing ? { id: listing.id, title: listing.title, category: listing.category } : null };
       }));
+      noCacheHeaders(res);
       res.json({
         sales: enriched,
         summary: {
@@ -431,17 +555,10 @@ export function createMarketplaceRouter(): Router {
       });
     } catch (err: any) {
       console.error("[marketplace] GET /my/sales error:", err.message);
+      noCacheHeaders(res);
       res.status(500).json({ error: err.message });
     }
   });
 
   return router;
-}
-
-// ── Auth guard helper ─────────────────────────────────────────────────────────
-function requireAuth(req: Request, res: Response, next: () => void) {
-  if (!req.user) {
-    return res.status(401).json({ error: "Not authenticated" });
-  }
-  next();
 }

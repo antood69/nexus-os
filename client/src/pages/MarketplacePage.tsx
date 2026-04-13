@@ -1,57 +1,19 @@
-import { useState } from "react";
+import { useState, useRef, useCallback } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { Link } from "wouter";
-import { Search, Star, Download, Package, Store } from "lucide-react";
+import { Search, Star, Download, Package, Store, RefreshCw, AlertTriangle } from "lucide-react";
 import { apiRequest } from "@/lib/queryClient";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-
-// ── Types (matches shared/schema.ts MarketplaceListing) ───────────────────
-interface MarketplaceListing {
-  id: string;
-  sellerId: number;
-  title: string;
-  description: string;
-  shortDescription: string | null;
-  category: "workflow" | "agent" | "tool" | "prompt_pack" | "theme";
-  listingType: string;
-  priceUsd: number;
-  priceType: "one_time" | "monthly" | "free";
-  contentRef: string | null;
-  version: string;
-  isPublished: number;
-  isVerified: number;
-  installCount: number;
-  ratingAvg: number;
-  ratingCount: number;
-  previewImages: string | null;
-  tags: string | null;
-  createdAt: string;
-  updatedAt: string;
-}
-
-interface CategoryCount {
-  category: string;
-  count: number;
-}
-
-// ── Category styling ───────────────────────────────────────────────────────
-const categoryColors: Record<string, { badge: string; placeholder: string }> = {
-  workflow:    { badge: "bg-blue-500/15 text-blue-400 border-blue-500/20",   placeholder: "from-blue-900/40 to-blue-800/20" },
-  agent:       { badge: "bg-violet-500/15 text-violet-400 border-violet-500/20", placeholder: "from-violet-900/40 to-violet-800/20" },
-  tool:        { badge: "bg-emerald-500/15 text-emerald-400 border-emerald-500/20", placeholder: "from-emerald-900/40 to-emerald-800/20" },
-  prompt_pack: { badge: "bg-orange-500/15 text-orange-400 border-orange-500/20",  placeholder: "from-orange-900/40 to-orange-800/20" },
-  theme:       { badge: "bg-pink-500/15 text-pink-400 border-pink-500/20",   placeholder: "from-pink-900/40 to-pink-800/20" },
-};
-
-const categoryLabels: Record<string, string> = {
-  workflow: "Workflow",
-  agent: "Agent",
-  tool: "Tool",
-  prompt_pack: "Prompt Pack",
-  theme: "Theme",
-};
+import {
+  type MarketplaceListing,
+  type CategoryCount,
+  categoryColors,
+  categoryLabels,
+  parseJsonArray,
+  getPriceLabel,
+} from "@/lib/marketplace-types";
 
 function StarRating({ rating, count }: { rating: number; count: number }) {
   const stars = Math.round(rating * 2) / 2;
@@ -79,20 +41,11 @@ function CategoryPlaceholder({ category }: { category: string }) {
   );
 }
 
-function parseJsonArray(val: string | null): string[] {
-  if (!val) return [];
-  try { return JSON.parse(val); } catch { return []; }
-}
-
 function ListingCard({ listing }: { listing: MarketplaceListing }) {
   const colors = categoryColors[listing.category] ?? { badge: "bg-muted text-muted-foreground border-border", placeholder: "from-muted/40 to-muted/20" };
   const label = categoryLabels[listing.category] ?? listing.category;
+  const priceLabel = getPriceLabel(listing);
   const isFree = listing.priceType === "free" || listing.priceUsd === 0;
-  const priceLabel = isFree
-    ? "FREE"
-    : listing.priceType === "monthly"
-    ? `$${listing.priceUsd.toFixed(2)}/mo`
-    : `$${listing.priceUsd.toFixed(2)}`;
   const priceStyle = isFree
     ? "bg-emerald-500/15 text-emerald-400 border-emerald-500/20"
     : "bg-blue-500/15 text-blue-400 border-blue-500/20";
@@ -100,7 +53,7 @@ function ListingCard({ listing }: { listing: MarketplaceListing }) {
 
   return (
     <Link href={`/marketplace/${listing.id}`}>
-      <div data-testid={`card-listing-${listing.id}`} className="bg-card border border-border rounded-xl overflow-hidden hover:border-primary/30 transition-colors cursor-pointer flex flex-col h-full">
+      <div className="bg-card border border-border rounded-xl overflow-hidden hover:border-primary/30 transition-colors cursor-pointer flex flex-col h-full">
         <div className="w-full h-40 overflow-hidden flex-shrink-0">
           {images[0] ? (
             <img
@@ -135,7 +88,7 @@ function ListingCard({ listing }: { listing: MarketplaceListing }) {
             </div>
           </div>
 
-          <Button variant="outline" size="sm" className="w-full text-xs mt-1" data-testid={`button-view-${listing.id}`}>
+          <Button variant="outline" size="sm" className="w-full text-xs mt-1">
             View
           </Button>
         </div>
@@ -158,19 +111,19 @@ function SkeletonCard() {
   );
 }
 
-// ── Main Page ──────────────────────────────────────────────────────────────
 export default function MarketplacePage() {
   const [search, setSearch] = useState("");
   const [category, setCategory] = useState("all");
   const [sort, setSort] = useState("popular");
   const [priceFilter, setPriceFilter] = useState("all");
   const [debouncedSearch, setDebouncedSearch] = useState("");
+  const searchTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  const handleSearchChange = (value: string) => {
+  const handleSearchChange = useCallback((value: string) => {
     setSearch(value);
-    clearTimeout((window as any)._mktSearchTimer);
-    (window as any)._mktSearchTimer = setTimeout(() => setDebouncedSearch(value), 350);
-  };
+    if (searchTimerRef.current) clearTimeout(searchTimerRef.current);
+    searchTimerRef.current = setTimeout(() => setDebouncedSearch(value), 350);
+  }, []);
 
   const listingsQuery = useQuery<MarketplaceListing[]>({
     queryKey: ["/api/marketplace/listings", category, sort, priceFilter, debouncedSearch],
@@ -225,7 +178,6 @@ export default function MarketplacePage() {
         <div className="max-w-lg mx-auto relative">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground pointer-events-none" />
           <Input
-            data-testid="input-marketplace-search"
             value={search}
             onChange={(e) => handleSearchChange(e.target.value)}
             placeholder="Search listings..."
@@ -240,7 +192,6 @@ export default function MarketplacePage() {
           {tabs.map((tab) => (
             <button
               key={tab.key}
-              data-testid={`tab-category-${tab.key}`}
               onClick={() => setCategory(tab.key)}
               className={`flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-medium transition-colors ${
                 category === tab.key
@@ -260,7 +211,7 @@ export default function MarketplacePage() {
 
         <div className="flex items-center gap-2 flex-shrink-0">
           <Select value={sort} onValueChange={setSort}>
-            <SelectTrigger data-testid="select-sort" className="bg-background border-border h-8 text-xs w-40">
+            <SelectTrigger className="bg-background border-border h-8 text-xs w-40">
               <SelectValue />
             </SelectTrigger>
             <SelectContent className="bg-card border-border">
@@ -272,7 +223,7 @@ export default function MarketplacePage() {
           </Select>
 
           <Select value={priceFilter} onValueChange={setPriceFilter}>
-            <SelectTrigger data-testid="select-price" className="bg-background border-border h-8 text-xs w-28">
+            <SelectTrigger className="bg-background border-border h-8 text-xs w-28">
               <SelectValue />
             </SelectTrigger>
             <SelectContent className="bg-card border-border">
@@ -283,7 +234,7 @@ export default function MarketplacePage() {
           </Select>
 
           <Link href="/marketplace/my">
-            <Button variant="outline" size="sm" className="text-xs h-8 border-border" data-testid="button-my-listings">
+            <Button variant="outline" size="sm" className="text-xs h-8 border-border">
               My Listings
             </Button>
           </Link>
@@ -296,13 +247,31 @@ export default function MarketplacePage() {
           {[1, 2, 3, 4, 5, 6].map((i) => <SkeletonCard key={i} />)}
         </div>
       ) : listingsQuery.isError ? (
-        <div data-testid="listings-error" className="text-center py-20 text-sm text-muted-foreground">
-          Failed to load listings. Please try again.
+        <div className="flex flex-col items-center justify-center py-20 text-center rounded-xl border border-red-500/20 bg-red-500/5">
+          <AlertTriangle className="w-10 h-10 text-red-400 mb-3" />
+          <p className="text-sm font-medium text-red-400 mb-1">Failed to load marketplace listings</p>
+          <p className="text-xs text-red-400/70 mb-4 max-w-md">
+            {listingsQuery.error instanceof Error ? listingsQuery.error.message : "An unexpected error occurred. Please try again."}
+          </p>
+          <Button
+            variant="outline"
+            size="sm"
+            className="gap-2 text-red-400 border-red-500/30 hover:bg-red-500/10"
+            onClick={() => listingsQuery.refetch()}
+          >
+            <RefreshCw className="w-3.5 h-3.5" />
+            Retry
+          </Button>
         </div>
       ) : !listingsQuery.data?.length ? (
-        <div data-testid="listings-empty" className="flex flex-col items-center justify-center py-20 text-center">
+        <div className="flex flex-col items-center justify-center py-20 text-center">
           <Package className="w-12 h-12 text-muted-foreground mb-3" />
-          <p className="text-sm text-muted-foreground mb-1">No listings yet. Check back soon!</p>
+          <p className="text-sm text-muted-foreground mb-1">No listings found</p>
+          {(debouncedSearch || category !== "all" || priceFilter !== "all") ? (
+            <p className="text-xs text-muted-foreground">Try adjusting your filters or search query</p>
+          ) : (
+            <p className="text-xs text-muted-foreground">Check back soon — new items are added regularly!</p>
+          )}
         </div>
       ) : (
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">

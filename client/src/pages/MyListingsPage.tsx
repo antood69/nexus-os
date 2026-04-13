@@ -5,7 +5,6 @@ import {
   Plus,
   Pencil,
   Trash2,
-  Store,
   Package,
   Eye,
   EyeOff,
@@ -13,6 +12,8 @@ import {
   Star,
   Download,
   ExternalLink,
+  RefreshCw,
+  AlertTriangle,
 } from "lucide-react";
 import { queryClient, apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
@@ -21,32 +22,13 @@ import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
-
-// ── Types (matches shared/schema.ts + server stats) ───────────────────────
-interface MarketplaceListing {
-  id: string;
-  sellerId: number;
-  title: string;
-  description: string;
-  shortDescription: string | null;
-  category: "workflow" | "agent" | "tool" | "prompt_pack" | "theme";
-  listingType: string;
-  priceUsd: number;
-  priceType: "one_time" | "monthly" | "free";
-  contentRef: string | null;
-  version: string;
-  isPublished: number;
-  isVerified: number;
-  installCount: number;
-  ratingAvg: number;
-  ratingCount: number;
-  previewImages: string | null;
-  tags: string | null;
-  createdAt: string;
-  updatedAt: string;
-  purchaseCount?: number;
-  revenue?: number;
-}
+import {
+  type MarketplaceListingWithStats,
+  categoryColors,
+  categoryLabels,
+  parseJsonArray,
+  getPriceLabel,
+} from "@/lib/marketplace-types";
 
 interface ListingFormData {
   title: string;
@@ -58,28 +40,6 @@ interface ListingFormData {
   tags: string;
   previewImages: string;
   isPublished: boolean;
-}
-
-// ── Helpers ────────────────────────────────────────────────────────────────
-const categoryColors: Record<string, string> = {
-  workflow:    "bg-blue-500/15 text-blue-400 border-blue-500/20",
-  agent:       "bg-violet-500/15 text-violet-400 border-violet-500/20",
-  tool:        "bg-emerald-500/15 text-emerald-400 border-emerald-500/20",
-  prompt_pack: "bg-orange-500/15 text-orange-400 border-orange-500/20",
-  theme:       "bg-pink-500/15 text-pink-400 border-pink-500/20",
-};
-
-const categoryLabels: Record<string, string> = {
-  workflow: "Workflow",
-  agent: "Agent",
-  tool: "Tool",
-  prompt_pack: "Prompt Pack",
-  theme: "Theme",
-};
-
-function parseJsonArray(val: string | null): string[] {
-  if (!val) return [];
-  try { return JSON.parse(val); } catch { return []; }
 }
 
 const emptyForm: ListingFormData = {
@@ -94,7 +54,7 @@ const emptyForm: ListingFormData = {
   isPublished: false,
 };
 
-function listingToForm(l: MarketplaceListing): ListingFormData {
+function listingToForm(l: MarketplaceListingWithStats): ListingFormData {
   return {
     title: l.title,
     shortDescription: l.shortDescription ?? "",
@@ -108,7 +68,6 @@ function listingToForm(l: MarketplaceListing): ListingFormData {
   };
 }
 
-// ── Listing Form Modal ─────────────────────────────────────────────────────
 function ListingFormModal({
   open,
   onClose,
@@ -116,7 +75,7 @@ function ListingFormModal({
 }: {
   open: boolean;
   onClose: () => void;
-  editing: MarketplaceListing | null;
+  editing: MarketplaceListingWithStats | null;
 }) {
   const { toast } = useToast();
   const [form, setForm] = useState<ListingFormData>(() =>
@@ -188,7 +147,6 @@ function ListingFormModal({
           <div>
             <label className="text-xs font-medium text-muted-foreground mb-1.5 block">Title *</label>
             <Input
-              data-testid="input-listing-title"
               value={form.title}
               onChange={(e) => set("title", e.target.value)}
               placeholder="e.g. SEO Audit Workflow"
@@ -200,7 +158,6 @@ function ListingFormModal({
           <div>
             <label className="text-xs font-medium text-muted-foreground mb-1.5 block">Short Description *</label>
             <Input
-              data-testid="input-listing-short-desc"
               value={form.shortDescription}
               onChange={(e) => set("shortDescription", e.target.value)}
               placeholder="One-line summary for listing cards"
@@ -212,7 +169,6 @@ function ListingFormModal({
           <div>
             <label className="text-xs font-medium text-muted-foreground mb-1.5 block">Full Description</label>
             <Textarea
-              data-testid="input-listing-description"
               value={form.description}
               onChange={(e) => set("description", e.target.value)}
               placeholder="Detailed description..."
@@ -224,7 +180,7 @@ function ListingFormModal({
             <div>
               <label className="text-xs font-medium text-muted-foreground mb-1.5 block">Category *</label>
               <Select value={form.category} onValueChange={(v) => set("category", v)}>
-                <SelectTrigger data-testid="select-listing-category" className="bg-background border-border">
+                <SelectTrigger className="bg-background border-border">
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent className="bg-card border-border">
@@ -245,7 +201,7 @@ function ListingFormModal({
                   if (v === "free") set("priceUsd", "0");
                 }}
               >
-                <SelectTrigger data-testid="select-listing-price-type" className="bg-background border-border">
+                <SelectTrigger className="bg-background border-border">
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent className="bg-card border-border">
@@ -261,7 +217,6 @@ function ListingFormModal({
             <div>
               <label className="text-xs font-medium text-muted-foreground mb-1.5 block">Price (USD) *</label>
               <Input
-                data-testid="input-listing-price"
                 type="number"
                 min="0"
                 step="0.01"
@@ -278,7 +233,6 @@ function ListingFormModal({
               Tags <span className="font-normal">(comma-separated)</span>
             </label>
             <Input
-              data-testid="input-listing-tags"
               value={form.tags}
               onChange={(e) => set("tags", e.target.value)}
               placeholder="automation, seo, research"
@@ -291,7 +245,6 @@ function ListingFormModal({
               Preview Image URLs <span className="font-normal">(comma-separated)</span>
             </label>
             <Input
-              data-testid="input-listing-images"
               value={form.previewImages}
               onChange={(e) => set("previewImages", e.target.value)}
               placeholder="https://example.com/preview.png"
@@ -302,7 +255,6 @@ function ListingFormModal({
           <div className="flex items-center gap-3">
             <button
               type="button"
-              data-testid="toggle-listing-published"
               onClick={() => set("isPublished", !form.isPublished)}
               className={`relative w-10 rounded-full transition-colors ${
                 form.isPublished ? "bg-primary" : "bg-muted"
@@ -320,7 +272,7 @@ function ListingFormModal({
           </div>
 
           <div className="flex items-center gap-2 pt-1">
-            <Button type="submit" disabled={!form.title.trim() || isPending} className="flex-1" data-testid="button-submit-listing">
+            <Button type="submit" disabled={!form.title.trim() || isPending} className="flex-1">
               {isPending ? "Saving..." : editing ? "Save Changes" : "Create Listing"}
             </Button>
             <Button type="button" variant="ghost" onClick={onClose}>
@@ -333,13 +285,12 @@ function ListingFormModal({
   );
 }
 
-// ── Main Page ──────────────────────────────────────────────────────────────
 export default function MyListingsPage() {
   const { toast } = useToast();
   const [modalOpen, setModalOpen] = useState(false);
-  const [editingListing, setEditingListing] = useState<MarketplaceListing | null>(null);
+  const [editingListing, setEditingListing] = useState<MarketplaceListingWithStats | null>(null);
 
-  const listingsQuery = useQuery<MarketplaceListing[]>({
+  const listingsQuery = useQuery<MarketplaceListingWithStats[]>({
     queryKey: ["/api/marketplace/my/listings"],
     queryFn: async () => {
       const res = await apiRequest("GET", "/api/marketplace/my/listings");
@@ -364,7 +315,7 @@ export default function MyListingsPage() {
     setModalOpen(true);
   };
 
-  const openEdit = (listing: MarketplaceListing) => {
+  const openEdit = (listing: MarketplaceListingWithStats) => {
     setEditingListing(listing);
     setModalOpen(true);
   };
@@ -380,7 +331,7 @@ export default function MyListingsPage() {
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-3">
           <Link href="/marketplace">
-            <button data-testid="button-back" className="p-1.5 rounded-md text-muted-foreground hover:bg-secondary hover:text-foreground transition-colors">
+            <button className="p-1.5 rounded-md text-muted-foreground hover:bg-secondary hover:text-foreground transition-colors">
               <ArrowLeft className="w-4 h-4" />
             </button>
           </Link>
@@ -389,7 +340,7 @@ export default function MyListingsPage() {
             <p className="text-sm text-muted-foreground mt-0.5">Manage your marketplace listings</p>
           </div>
         </div>
-        <Button className="gap-2" onClick={openCreate} data-testid="button-create-listing">
+        <Button className="gap-2" onClick={openCreate}>
           <Plus className="w-4 h-4" />
           Create Listing
         </Button>
@@ -402,12 +353,29 @@ export default function MyListingsPage() {
             <div key={i} className="h-20 rounded-xl bg-card border border-border animate-pulse" />
           ))}
         </div>
+      ) : listingsQuery.isError ? (
+        <div className="flex flex-col items-center justify-center py-20 text-center rounded-xl border border-red-500/20 bg-red-500/5">
+          <AlertTriangle className="w-10 h-10 text-red-400 mb-3" />
+          <p className="text-sm font-medium text-red-400 mb-1">Failed to load your listings</p>
+          <p className="text-xs text-red-400/70 mb-4">
+            {listingsQuery.error instanceof Error ? listingsQuery.error.message : "An unexpected error occurred."}
+          </p>
+          <Button
+            variant="outline"
+            size="sm"
+            className="gap-2 text-red-400 border-red-500/30 hover:bg-red-500/10"
+            onClick={() => listingsQuery.refetch()}
+          >
+            <RefreshCw className="w-3.5 h-3.5" />
+            Retry
+          </Button>
+        </div>
       ) : !listingsQuery.data?.length ? (
-        <div data-testid="my-listings-empty" className="flex flex-col items-center justify-center py-20 text-center">
+        <div className="flex flex-col items-center justify-center py-20 text-center">
           <Package className="w-12 h-12 text-muted-foreground mb-3" />
           <p className="text-sm text-muted-foreground mb-1">No listings yet</p>
           <p className="text-xs text-muted-foreground mb-4">Create your first listing to sell in the marketplace</p>
-          <Button size="sm" className="gap-2" onClick={openCreate} data-testid="button-create-listing-empty">
+          <Button size="sm" className="gap-2" onClick={openCreate}>
             <Plus className="w-4 h-4" />
             Create Listing
           </Button>
@@ -415,19 +383,13 @@ export default function MyListingsPage() {
       ) : (
         <div className="space-y-3">
           {listingsQuery.data.map((listing) => {
-            const catColor = categoryColors[listing.category] ?? "bg-muted text-muted-foreground border-border";
+            const catColor = categoryColors[listing.category]?.badge ?? "bg-muted text-muted-foreground border-border";
             const catLabel = categoryLabels[listing.category] ?? listing.category;
-            const isFree = listing.priceType === "free" || listing.priceUsd === 0;
-            const priceLabel = isFree
-              ? "Free"
-              : listing.priceType === "monthly"
-              ? `$${listing.priceUsd.toFixed(2)}/mo`
-              : `$${listing.priceUsd.toFixed(2)}`;
+            const priceLabel = getPriceLabel(listing);
 
             return (
               <div
                 key={listing.id}
-                data-testid={`card-my-listing-${listing.id}`}
                 className="bg-card border border-border rounded-xl p-4 flex items-center gap-4"
               >
                 <div
@@ -472,19 +434,17 @@ export default function MyListingsPage() {
 
                 <div className="flex items-center gap-1.5 flex-shrink-0">
                   <Link href={`/marketplace/${listing.id}`}>
-                    <button data-testid={`button-view-listing-${listing.id}`} className="p-1.5 rounded-md text-muted-foreground hover:bg-secondary hover:text-foreground transition-colors">
+                    <button className="p-1.5 rounded-md text-muted-foreground hover:bg-secondary hover:text-foreground transition-colors">
                       <ExternalLink className="w-3.5 h-3.5" />
                     </button>
                   </Link>
                   <button
-                    data-testid={`button-edit-listing-${listing.id}`}
                     onClick={() => openEdit(listing)}
                     className="p-1.5 rounded-md text-muted-foreground hover:bg-secondary hover:text-foreground transition-colors"
                   >
                     <Pencil className="w-3.5 h-3.5" />
                   </button>
                   <button
-                    data-testid={`button-delete-listing-${listing.id}`}
                     onClick={() => {
                       if (confirm("Delete this listing?")) deleteMutation.mutate(listing.id);
                     }}

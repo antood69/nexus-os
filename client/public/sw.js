@@ -19,8 +19,15 @@ self.addEventListener('activate', (event) => {
 
 self.addEventListener('fetch', (event) => {
   const url = new URL(event.request.url);
+
+  // NEVER cache marketplace API requests — always go to network, no fallback
+  if (url.pathname.startsWith('/api/marketplace')) {
+    event.respondWith(fetch(event.request));
+    return;
+  }
+
   if (url.pathname.startsWith('/api/')) {
-    // Network-first for API
+    // Network-first for other API routes
     event.respondWith(
       fetch(event.request).catch(() => caches.match(event.request))
     );

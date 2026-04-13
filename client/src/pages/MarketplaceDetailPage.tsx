@@ -10,77 +10,24 @@ import {
   Tag,
   User,
   LogIn,
+  RefreshCw,
+  AlertTriangle,
 } from "lucide-react";
 import { queryClient, apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/hooks/useAuth";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
-
-// ── Types (matches shared/schema.ts) ──────────────────────────────────────
-interface MarketplaceListing {
-  id: string;
-  sellerId: number;
-  title: string;
-  description: string;
-  shortDescription: string | null;
-  category: "workflow" | "agent" | "tool" | "prompt_pack" | "theme";
-  listingType: string;
-  priceUsd: number;
-  priceType: "one_time" | "monthly" | "free";
-  contentRef: string | null;
-  version: string;
-  isPublished: number;
-  isVerified: number;
-  installCount: number;
-  ratingAvg: number;
-  ratingCount: number;
-  previewImages: string | null;
-  tags: string | null;
-  createdAt: string;
-  updatedAt: string;
-}
-
-interface MarketplaceReview {
-  id: string;
-  listingId: string;
-  buyerId: number;
-  purchaseId: string;
-  rating: number;
-  reviewText: string | null;
-  isVerifiedPurchase: number;
-  createdAt: string;
-}
-
-// ── Helpers ────────────────────────────────────────────────────────────────
-const categoryColors: Record<string, string> = {
-  workflow:    "bg-blue-500/15 text-blue-400 border-blue-500/20",
-  agent:       "bg-violet-500/15 text-violet-400 border-violet-500/20",
-  tool:        "bg-emerald-500/15 text-emerald-400 border-emerald-500/20",
-  prompt_pack: "bg-orange-500/15 text-orange-400 border-orange-500/20",
-  theme:       "bg-pink-500/15 text-pink-400 border-pink-500/20",
-};
-
-const categoryLabels: Record<string, string> = {
-  workflow: "Workflow",
-  agent: "Agent",
-  tool: "Tool",
-  prompt_pack: "Prompt Pack",
-  theme: "Theme",
-};
-
-function parseJsonArray(val: string | null): string[] {
-  if (!val) return [];
-  try { return JSON.parse(val); } catch { return []; }
-}
-
-function formatDate(dateStr: string) {
-  try {
-    return new Date(dateStr).toLocaleDateString("en-US", { year: "numeric", month: "short", day: "numeric" });
-  } catch {
-    return dateStr;
-  }
-}
+import {
+  type MarketplaceListing,
+  type MarketplaceReview,
+  categoryColors,
+  categoryLabels,
+  parseJsonArray,
+  formatDate,
+  getPriceLabel,
+  isFreeItem,
+} from "@/lib/marketplace-types";
 
 function StarRating({ rating, interactive = false, onRate }: { rating: number; interactive?: boolean; onRate?: (r: number) => void }) {
   const [hover, setHover] = useState(0);
@@ -140,7 +87,6 @@ function SkeletonDetail() {
   );
 }
 
-// ── Main Page ──────────────────────────────────────────────────────────────
 export default function MarketplaceDetailPage() {
   const { id } = useParams<{ id: string }>();
   const { toast } = useToast();
@@ -216,25 +162,58 @@ export default function MarketplaceDetailPage() {
   });
 
   if (listingQuery.isLoading) return <SkeletonDetail />;
-  if (listingQuery.isError || !listingQuery.data?.listing) {
+
+  if (listingQuery.isError) {
     return (
-      <div className="p-6">
+      <div className="p-6 max-w-[1200px]">
         <Link href="/marketplace">
-          <button data-testid="button-back" className="flex items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground mb-4">
+          <button className="flex items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground mb-6">
             <ArrowLeft className="w-4 h-4" /> Back to Marketplace
           </button>
         </Link>
-        <p className="text-sm text-muted-foreground">Listing not found.</p>
+        <div className="flex flex-col items-center justify-center py-20 text-center rounded-xl border border-red-500/20 bg-red-500/5">
+          <AlertTriangle className="w-10 h-10 text-red-400 mb-3" />
+          <p className="text-sm font-medium text-red-400 mb-1">Failed to load listing</p>
+          <p className="text-xs text-red-400/70 mb-4">
+            {listingQuery.error instanceof Error ? listingQuery.error.message : "This listing may not exist or there was a server error."}
+          </p>
+          <Button
+            variant="outline"
+            size="sm"
+            className="gap-2 text-red-400 border-red-500/30 hover:bg-red-500/10"
+            onClick={() => listingQuery.refetch()}
+          >
+            <RefreshCw className="w-3.5 h-3.5" />
+            Retry
+          </Button>
+        </div>
+      </div>
+    );
+  }
+
+  if (!listingQuery.data?.listing) {
+    return (
+      <div className="p-6 max-w-[1200px]">
+        <Link href="/marketplace">
+          <button className="flex items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground mb-6">
+            <ArrowLeft className="w-4 h-4" /> Back to Marketplace
+          </button>
+        </Link>
+        <div className="flex flex-col items-center justify-center py-20 text-center rounded-xl border border-amber-500/20 bg-amber-500/5">
+          <Package className="w-10 h-10 text-amber-400 mb-3" />
+          <p className="text-sm font-medium text-amber-400 mb-1">Listing not found</p>
+          <p className="text-xs text-amber-400/70">This listing may have been removed or doesn't exist.</p>
+        </div>
       </div>
     );
   }
 
   const listing = listingQuery.data.listing;
   const reviews = reviewsQuery.data?.reviews ?? listingQuery.data.reviews ?? [];
-  const catColors = categoryColors[listing.category] ?? "bg-muted text-muted-foreground border-border";
+  const catColors = categoryColors[listing.category]?.badge ?? "bg-muted text-muted-foreground border-border";
   const catLabel = categoryLabels[listing.category] ?? listing.category;
-  const isFree = listing.priceType === "free" || listing.priceUsd === 0;
-  const priceLabel = isFree ? "Free" : listing.priceType === "monthly" ? `$${listing.priceUsd.toFixed(2)}/mo` : `$${listing.priceUsd.toFixed(2)}`;
+  const free = isFreeItem(listing);
+  const priceLabel = getPriceLabel(listing);
   const images = parseJsonArray(listing.previewImages);
   const tagsList = parseJsonArray(listing.tags);
 
@@ -242,7 +221,7 @@ export default function MarketplaceDetailPage() {
     <div className="p-6 max-w-[1200px] space-y-6">
       {/* Back nav */}
       <Link href="/marketplace">
-        <button data-testid="button-back" className="flex items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground transition-colors">
+        <button className="flex items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground transition-colors">
           <ArrowLeft className="w-4 h-4" />
           Back to Marketplace
         </button>
@@ -304,7 +283,7 @@ export default function MarketplaceDetailPage() {
         <div className="space-y-4">
           <div className="bg-card border border-border rounded-xl p-5 space-y-4 sticky top-4">
             <div className="text-center">
-              <span className="text-3xl font-bold">{priceLabel}</span>
+              <span className="text-3xl font-bold">{free ? "Free" : priceLabel}</span>
               {listing.priceType === "monthly" && (
                 <span className="text-xs text-muted-foreground ml-1">/ month</span>
               )}
@@ -316,17 +295,15 @@ export default function MarketplaceDetailPage() {
                 className="w-full gap-2"
                 variant="outline"
                 onClick={() => navigate("/login")}
-                data-testid="button-login-to-install"
               >
                 <LogIn className="w-4 h-4" />
                 Login to install
               </Button>
-            ) : isFree ? (
+            ) : free ? (
               <Button
                 className="w-full gap-2"
                 onClick={() => installMutation.mutate()}
                 disabled={installMutation.isPending}
-                data-testid="button-install"
               >
                 <Download className="w-4 h-4" />
                 {installMutation.isPending ? "Installing..." : "Install Free"}
@@ -336,7 +313,6 @@ export default function MarketplaceDetailPage() {
                 className="w-full gap-2"
                 onClick={() => purchaseMutation.mutate()}
                 disabled={purchaseMutation.isPending}
-                data-testid="button-purchase"
               >
                 {purchaseMutation.isPending ? "Redirecting..." : `Purchase — ${priceLabel}`}
               </Button>
@@ -385,7 +361,7 @@ export default function MarketplaceDetailPage() {
             )}
           </h2>
           {isAuthenticated && !showReviewForm && (
-            <Button variant="outline" size="sm" className="text-xs" onClick={() => setShowReviewForm(true)} data-testid="button-write-review">
+            <Button variant="outline" size="sm" className="text-xs" onClick={() => setShowReviewForm(true)}>
               Write a Review
             </Button>
           )}
@@ -402,7 +378,6 @@ export default function MarketplaceDetailPage() {
             <div className="space-y-1">
               <label className="text-xs text-muted-foreground">Comment</label>
               <Textarea
-                data-testid="input-review-text"
                 value={reviewText}
                 onChange={(e) => setReviewText(e.target.value)}
                 placeholder="Share your experience..."
@@ -414,7 +389,6 @@ export default function MarketplaceDetailPage() {
                 size="sm"
                 onClick={() => reviewMutation.mutate()}
                 disabled={!reviewText.trim() || reviewMutation.isPending}
-                data-testid="button-submit-review"
               >
                 {reviewMutation.isPending ? "Submitting..." : "Submit Review"}
               </Button>
@@ -440,14 +414,28 @@ export default function MarketplaceDetailPage() {
               </div>
             ))}
           </div>
+        ) : reviewsQuery.isError ? (
+          <div className="flex flex-col items-center justify-center py-10 text-center rounded-xl border border-red-500/20 bg-red-500/5">
+            <AlertTriangle className="w-8 h-8 text-red-400 mb-2" />
+            <p className="text-sm font-medium text-red-400 mb-1">Failed to load reviews</p>
+            <Button
+              variant="outline"
+              size="sm"
+              className="gap-2 text-red-400 border-red-500/30 hover:bg-red-500/10 mt-2"
+              onClick={() => reviewsQuery.refetch()}
+            >
+              <RefreshCw className="w-3.5 h-3.5" />
+              Retry
+            </Button>
+          </div>
         ) : reviews.length === 0 ? (
-          <div data-testid="reviews-empty" className="text-center py-10 text-sm text-muted-foreground">
+          <div className="text-center py-10 text-sm text-muted-foreground">
             No reviews yet. Be the first to review this listing.
           </div>
         ) : (
           <div className="space-y-3">
             {reviews.map((review) => (
-              <div key={review.id} data-testid={`card-review-${review.id}`} className="bg-card border border-border rounded-xl p-4 space-y-2">
+              <div key={review.id} className="bg-card border border-border rounded-xl p-4 space-y-2">
                 <div className="flex items-center justify-between">
                   <div className="flex items-center gap-2">
                     <div className="w-7 h-7 rounded-full bg-primary/15 flex items-center justify-center">
