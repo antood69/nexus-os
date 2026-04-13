@@ -20,8 +20,10 @@ import {
 import TokenCounter from "./TokenCounter";
 import NotificationBell from "./NotificationBell";
 import WallpaperLayer from "./WallpaperLayer";
+import MobileTabBar from "./MobileTabBar";
 import { useAuth } from "@/hooks/useAuth";
 import { useTheme } from "@/contexts/ThemeContext";
+import { useIsMobile } from "@/hooks/useIsMobile";
 import { useEffect } from "react";
 
 const navItems = [
@@ -63,6 +65,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
   const { user, isLoading, isAuthenticated, isOwner, logout } = useAuth();
   const { wallpaperUrl, wallpaperType } = useTheme();
   const hasWallpaper = !!(wallpaperUrl && wallpaperType !== "none");
+  const isMobile = useIsMobile();
 
   // Redirect to login if not authenticated
   useEffect(() => {
@@ -92,9 +95,9 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
       {/* Wallpaper background layer */}
       <WallpaperLayer />
 
-      {/* Sidebar */}
+      {/* Sidebar — desktop only */}
       <aside
-        className={`w-56 flex-shrink-0 border-r border-border flex flex-col relative z-10 ${
+        className={`hidden md:flex w-56 flex-shrink-0 border-r border-border flex-col relative z-10 ${
           hasWallpaper
             ? "bg-sidebar/80 backdrop-blur-xl"
             : "bg-sidebar"
@@ -196,23 +199,52 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
 
       {/* Main content */}
       <div className="flex-1 flex flex-col overflow-hidden relative z-10">
-        {/* Top bar with notification bell */}
-        <div
-          className={`h-12 border-b border-border flex items-center justify-end px-4 gap-3 shrink-0 ${
-            hasWallpaper
-              ? "bg-card/80 backdrop-blur-xl"
-              : "bg-card"
-          }`}
-        >
-          <NotificationBell />
-          <div className="w-7 h-7 rounded-full bg-primary/20 flex items-center justify-center text-xs font-semibold text-primary">
-            {(user?.displayName || user?.email || "U").charAt(0).toUpperCase()}
+        {/* Mobile top header bar */}
+        {isMobile && (
+          <div
+            className={`flex md:hidden h-14 items-center justify-between px-4 border-b border-border shrink-0 ${
+              hasWallpaper
+                ? "bg-card/80 backdrop-blur-xl"
+                : "bg-card"
+            }`}
+          >
+            {/* Left spacer to center the logo */}
+            <div className="w-8" />
+            {/* Centered logo */}
+            <div className="flex items-center gap-2">
+              <BunzLogo />
+              <span className="font-semibold text-sm tracking-tight text-foreground">Bunz</span>
+            </div>
+            {/* Right: notification bell */}
+            <div className="flex items-center">
+              <NotificationBell />
+            </div>
           </div>
-        </div>
-        <main className="flex-1 overflow-y-auto overscroll-contain">
+        )}
+
+        {/* Desktop top bar with notification bell */}
+        {!isMobile && (
+          <div
+            className={`h-12 border-b border-border flex items-center justify-end px-4 gap-3 shrink-0 ${
+              hasWallpaper
+                ? "bg-card/80 backdrop-blur-xl"
+                : "bg-card"
+            }`}
+          >
+            <NotificationBell />
+            <div className="w-7 h-7 rounded-full bg-primary/20 flex items-center justify-center text-xs font-semibold text-primary">
+              {(user?.displayName || user?.email || "U").charAt(0).toUpperCase()}
+            </div>
+          </div>
+        )}
+
+        <main className={`flex-1 overflow-y-auto overscroll-contain ${isMobile ? "pb-16" : ""}`}>
           {children}
         </main>
       </div>
+
+      {/* Mobile bottom tab bar */}
+      {isMobile && <MobileTabBar />}
     </div>
   );
 }
