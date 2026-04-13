@@ -2101,7 +2101,95 @@ All claims in this document are backed by the four research files. Key sources:
 
 ---
 
-## Appendix B: Technical Stack Reference
+## Appendix B: Cross-Phase Enhancements
+
+These six features are woven across multiple phases and should be implemented alongside the phase they most naturally belong to.
+
+### B.1 Free Tier (Implement with Phase 2)
+
+Add a free plan alongside Pro and Agency. Research shows 6-8% of free users convert to paid on AI-native products (ChartMogul). Users who deploy one working agent convert at 3-5x the baseline rate.
+
+| Plan | Price | Monthly Token Allowance | Limits |
+|------|-------|------------------------|--------|
+| Free | $0 | 50K tokens | 2 workflows, 3 agents, no BYOK, marketplace browse only |
+| Starter | $19/mo | 500K tokens | 10 workflows, 10 agents, BYOK |
+| Pro | $79/mo | 2M tokens | Unlimited workflows/agents, BYOK, API access |
+| Agency | $199/mo | 10M tokens | Everything + white-label, team seats, priority support |
+
+Free tier cost: estimated $5-10/month per active free user in API spend. This is the growth engine — worth it.
+
+The free tier must allow users to reach the "aha moment" before hitting limits. A free tier that blocks the core workflow converts at 1-2%. One that allows 80% of the workflow converts at 8-12%.
+
+### B.2 Referral Credits (Implement with Phase 2)
+
+"Invite a friend, both get 500K tokens free."
+
+- Referral link generated per user in Settings
+- When referred user signs up and creates first agent, both accounts credited
+- Track referral chain in database: `referrals` table (referrer_id, referred_id, status, credited_at)
+- Cap at 10 referrals per month to prevent abuse
+- Cost: ~$1-3 per referral in API spend, but CAC on organic referrals is near zero
+
+### B.3 Agent Analytics Dashboard (Implement with Phase 3)
+
+Show users exactly how much value their agents deliver:
+
+- Tasks completed per agent per day/week/month
+- Estimated time saved (based on task type benchmarks)
+- Token spend per agent with cost breakdown
+- Success/failure rate per agent
+- "Your agents completed 47 tasks this week, saving ~12 hours"
+
+This is the retention driver. Users who see quantified ROI churn at half the rate. No extra API cost — built on data already tracked by the orchestrator.
+
+### B.4 Weekly Email Digest (Implement with Phase 3)
+
+Automated weekly email every Monday morning:
+
+- "Here's what your agents did this week"
+- Tasks completed, tokens used, estimated time saved
+- Top-performing agent highlight
+- Suggested optimizations ("Agent X failed 3 times — consider adjusting its tools")
+- CTA: "View full analytics" link back to dashboard
+
+Research finding: platforms where agents deliver results to users' inboxes create the highest daily return rate. Users get value without thinking about the platform.
+
+Stack: Resend or SendGrid ($0 for first 100 emails/day). Cron job runs Sunday night, sends Monday 8am user-local-time.
+
+### B.5 Starter Templates on Sign-Up (Implement with Phase 4)
+
+New users should never see an empty dashboard. Pre-load 3-5 starter workflows:
+
+1. "Research Assistant" — takes a topic, researches it, returns a summary
+2. "Content Writer" — takes a brief, generates a blog post draft
+3. "Code Reviewer" — paste code, get a review with suggestions
+4. "Email Drafter" — describe what you need, get a professional email
+5. "Data Analyzer" — upload a CSV, get insights and charts
+
+Each template is one-click activate. User sees it working within 2 minutes of signing up.
+
+Research: reducing time-to-first-agent to under 5 minutes is the highest-impact conversion tactic.
+
+### B.6 API Access for Developers (Implement with Phase 3)
+
+Pro+ users can hit NEXUS OS via REST API:
+
+```
+POST /api/v1/workflows/:id/execute
+Authorization: Bearer <user_api_key>
+
+{"input": "Research the latest trends in AI agents"}
+```
+
+- API key management in Settings (generate, revoke, rotate)
+- Rate limiting per plan tier
+- Webhook callbacks for async workflow completion
+- Opens up developer audience, CI/CD integrations, and programmatic usage
+- Tokens consumed via API count against the user's plan allowance
+
+---
+
+## Appendix C: Technical Stack Reference
 
 | Layer | Technology | Notes |
 |-------|-----------|-------|
