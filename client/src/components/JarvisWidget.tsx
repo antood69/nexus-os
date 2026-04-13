@@ -758,7 +758,7 @@ export function JarvisWidget() {
       {open && (
         <div
           className="fixed inset-0 z-[9999] flex flex-col"
-          style={{ background: "#000000" }}
+          style={{ background: "rgba(0,0,0,0.65)", backdropFilter: "blur(24px)", WebkitBackdropFilter: "blur(24px)" }}
         >
           {/* Scanline overlay removed — it created a visible rectangular gap behind the Three.js canvas */}
 
@@ -768,7 +768,7 @@ export function JarvisWidget() {
               <div className="w-2 h-2 rounded-full bg-cyan-400 animate-pulse" />
               <span className="text-cyan-400/60 text-xs font-mono tracking-[0.3em] uppercase">J.A.R.V.I.S.</span>
               <span className="text-cyan-500/30 text-xs font-mono">·</span>
-              <span className="text-cyan-400/40 text-xs font-mono tracking-widest">{STATE_LABELS[orbState]}</span>
+              <span className="text-cyan-400/40 text-xs tracking-widest" style={{ fontFamily: "'Inter', system-ui, sans-serif" }}>{STATE_LABELS[orbState]}</span>
             </div>
             <button
               onClick={() => setOpen(false)}
@@ -792,7 +792,7 @@ export function JarvisWidget() {
                 {(() => {
                   const last = [...messages].reverse().find(m => m.role === "assistant");
                   return last ? (
-                    <p className="text-cyan-300/70 text-sm font-mono leading-relaxed max-w-2xl mx-auto line-clamp-3">
+                    <p className="text-cyan-300/80 text-base leading-relaxed max-w-2xl mx-auto line-clamp-3" style={{ fontFamily: "'Inter', system-ui, sans-serif" }}>
                       {last.content}
                     </p>
                   ) : null;
@@ -809,11 +809,12 @@ export function JarvisWidget() {
                     className={`flex ${msg.role === "user" ? "justify-end" : "justify-start"}`}
                   >
                     <div
-                      className={`max-w-xs px-3 py-2 rounded-lg text-xs font-mono ${
+                      className={`max-w-sm px-3 py-2 rounded-lg ${
                         msg.role === "user"
-                          ? "bg-cyan-500/10 border border-cyan-500/20 text-cyan-200/80"
-                          : "text-cyan-400/60"
+                          ? "bg-cyan-500/10 border border-cyan-500/20 text-cyan-200/80 text-sm"
+                          : "text-cyan-400/70 text-base"
                       }`}
+                      style={{ fontFamily: "'Inter', system-ui, sans-serif" }}
                     >
                       {msg.content}
                     </div>
@@ -843,7 +844,8 @@ export function JarvisWidget() {
                   value={input}
                   onChange={(e) => setInput(e.target.value)}
                   placeholder="Ask JARVIS anything..."
-                  className="flex-1 bg-transparent border border-cyan-500/20 rounded-lg px-4 py-2.5 text-sm text-cyan-200/80 placeholder-cyan-500/30 font-mono outline-none focus:border-cyan-400/40 transition-colors"
+                  className="flex-1 bg-transparent border border-cyan-500/20 rounded-lg px-4 py-2.5 text-sm text-cyan-200/80 placeholder-cyan-500/30 outline-none focus:border-cyan-400/40 transition-colors"
+                  style={{ fontFamily: "'Inter', system-ui, sans-serif" }}
                   disabled={orbState === "thinking"}
                 />
 
@@ -855,7 +857,7 @@ export function JarvisWidget() {
                   <Send size={16} />
                 </button>
               </form>
-              <p className="text-center text-cyan-500/20 text-xs font-mono mt-2 tracking-widest">
+              <p className="text-center text-cyan-500/20 text-xs mt-2 tracking-widest" style={{ fontFamily: "'Inter', system-ui, sans-serif" }}>
                 ESC TO DISMISS · CTRL+J TO TOGGLE
               </p>
             </div>
