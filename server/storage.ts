@@ -11,6 +11,8 @@ import {
   type TokenUsageRecord, type InsertTokenUsage, tokenUsage,
   type TokenPack, type InsertTokenPack, tokenPacks,
   type UserPlan, type InsertUserPlan, userPlans,
+  type WorkflowRun, type InsertWorkflowRun, workflowRuns,
+  type AgentExecution, type InsertAgentExecution, agentExecutions,
 } from "@shared/schema";
 import { drizzle } from "drizzle-orm/better-sqlite3";
 import Database from "better-sqlite3";
@@ -50,6 +52,37 @@ sqlite.exec(`
     tokens_used INTEGER NOT NULL DEFAULT 0,
     period_start TEXT NOT NULL DEFAULT '',
     period_end TEXT NOT NULL DEFAULT '',
+    created_at TEXT NOT NULL DEFAULT ''
+  );
+  CREATE TABLE IF NOT EXISTS workflow_runs (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    workflow_id INTEGER NOT NULL,
+    user_id INTEGER NOT NULL DEFAULT 1,
+    status TEXT NOT NULL DEFAULT 'pending',
+    execution_mode TEXT NOT NULL DEFAULT 'boss',
+    input_data TEXT,
+    final_output TEXT,
+    total_tokens_used INTEGER NOT NULL DEFAULT 0,
+    error TEXT,
+    started_at TEXT,
+    completed_at TEXT,
+    created_at TEXT NOT NULL DEFAULT ''
+  );
+  CREATE TABLE IF NOT EXISTS agent_executions (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    run_id INTEGER NOT NULL,
+    agent_id INTEGER,
+    worker_type TEXT NOT NULL,
+    status TEXT NOT NULL DEFAULT 'pending',
+    input_payload TEXT,
+    output TEXT,
+    model_used TEXT,
+    input_tokens INTEGER NOT NULL DEFAULT 0,
+    output_tokens INTEGER NOT NULL DEFAULT 0,
+    total_tokens INTEGER NOT NULL DEFAULT 0,
+    error TEXT,
+    started_at TEXT,
+    completed_at TEXT,
     created_at TEXT NOT NULL DEFAULT ''
   );
 `);
@@ -112,6 +145,15 @@ export interface IStorage {
   createUserPlan(plan: InsertUserPlan): Promise<UserPlan>;
   updateUserPlan(id: number, data: Partial<InsertUserPlan>): Promise<UserPlan | undefined>;
   updateUser(id: number, data: Partial<{ tier: string; stripeCustomerId: string; subscriptionId: string }>): Promise<User | undefined>;
+  // Workflow Runs
+  getWorkflowRuns(workflowId: number): Promise<WorkflowRun[]>;
+  getWorkflowRun(id: number): Promise<WorkflowRun | undefined>;
+  createWorkflowRun(run: InsertWorkflowRun): Promise<WorkflowRun>;
+  updateWorkflowRun(id: number, data: Partial<InsertWorkflowRun>): Promise<WorkflowRun | undefined>;
+  // Agent Executions
+  getAgentExecutions(runId: number): Promise<AgentExecution[]>;
+  createAgentExecution(exec: InsertAgentExecution): Promise<AgentExecution>;
+  updateAgentExecution(id: number, data: Partial<InsertAgentExecution>): Promise<AgentExecution | undefined>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -278,6 +320,31 @@ export class DatabaseStorage implements IStorage {
   // Update User
   async updateUser(id: number, data: Partial<{ tier: string; stripeCustomerId: string; subscriptionId: string }>): Promise<User | undefined> {
     return db.update(users).set(data).where(eq(users.id, id)).returning().get();
+  }
+
+  // Workflow Runs
+  async getWorkflowRuns(workflowId: number) {
+    return db.select().from(workflowRuns).where(eq(workflowRuns.workflowId, workflowId)).orderBy(desc(workflowRuns.id)).all();
+  }
+  async getWorkflowRun(id: number) {
+    return db.select().from(workflowRuns).where(eq(workflowRuns.id, id)).get();
+  }
+  async createWorkflowRun(run: InsertWorkflowRun) {
+    return db.insert(workflowRuns).values({ ...run, createdAt: new Date().toISOString() }).returning().get();
+  }
+  async updateWorkflowRun(id: number, data: Partial<InsertWorkflowRun>) {
+    return db.update(workflowRuns).set(data).where(eq(workflowRuns.id, id)).returning().get();
+  }
+
+  // Agent Executions
+  async getAgentExecutions(runId: number) {
+    return db.select().from(agentExecutions).where(eq(agentExecutions.runId, runId)).orderBy(desc(agentExecutions.id)).all();
+  }
+  async createAgentExecution(exec: InsertAgentExecution) {
+    return db.insert(agentExecutions).values({ ...exec, createdAt: new Date().toISOString() }).returning().get();
+  }
+  async updateAgentExecution(id: number, data: Partial<InsertAgentExecution>) {
+    return db.update(agentExecutions).set(data).where(eq(agentExecutions.id, id)).returning().get();
   }
 }
 

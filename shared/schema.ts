@@ -196,3 +196,44 @@ export const userPlans = sqliteTable("user_plans", {
 export const insertUserPlanSchema = createInsertSchema(userPlans).omit({ id: true, createdAt: true });
 export type InsertUserPlan = z.infer<typeof insertUserPlanSchema>;
 export type UserPlan = typeof userPlans.$inferSelect;
+
+// Workflow Runs — individual execution instances of a workflow
+export const workflowRuns = sqliteTable("workflow_runs", {
+  id: integer("id").primaryKey({ autoIncrement: true }),
+  workflowId: integer("workflow_id").notNull(),
+  userId: integer("user_id").notNull().default(1),
+  status: text("status").notNull().default("pending"), // pending | running | paused | completed | failed | killed
+  executionMode: text("execution_mode").notNull().default("boss"), // boss | sequential | parallel
+  inputData: text("input_data"), // JSON: user prompt / trigger data
+  finalOutput: text("final_output"), // JSON: synthesized result
+  totalTokensUsed: integer("total_tokens_used").notNull().default(0),
+  error: text("error"),
+  startedAt: text("started_at"),
+  completedAt: text("completed_at"),
+  createdAt: text("created_at").notNull().default(""),
+});
+export const insertWorkflowRunSchema = createInsertSchema(workflowRuns).omit({ id: true, createdAt: true });
+export type InsertWorkflowRun = z.infer<typeof insertWorkflowRunSchema>;
+export type WorkflowRun = typeof workflowRuns.$inferSelect;
+
+// Agent Executions — individual agent task executions within a workflow run
+export const agentExecutions = sqliteTable("agent_executions", {
+  id: integer("id").primaryKey({ autoIncrement: true }),
+  runId: integer("run_id").notNull(),
+  agentId: integer("agent_id"),
+  workerType: text("worker_type").notNull(), // boss | researcher | coder | writer | reviewer | analyst
+  status: text("status").notNull().default("pending"), // pending | running | completed | failed | skipped
+  inputPayload: text("input_payload"), // JSON: task description
+  output: text("output"), // Agent's response text
+  modelUsed: text("model_used"),
+  inputTokens: integer("input_tokens").notNull().default(0),
+  outputTokens: integer("output_tokens").notNull().default(0),
+  totalTokens: integer("total_tokens").notNull().default(0),
+  error: text("error"),
+  startedAt: text("started_at"),
+  completedAt: text("completed_at"),
+  createdAt: text("created_at").notNull().default(""),
+});
+export const insertAgentExecutionSchema = createInsertSchema(agentExecutions).omit({ id: true, createdAt: true });
+export type InsertAgentExecution = z.infer<typeof insertAgentExecutionSchema>;
+export type AgentExecution = typeof agentExecutions.$inferSelect;

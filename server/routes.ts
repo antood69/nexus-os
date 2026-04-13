@@ -4,6 +4,7 @@ import { storage } from "./storage";
 import { insertWorkflowSchema, insertAgentSchema, insertJobSchema, insertMessageSchema, insertAuditReviewSchema } from "@shared/schema";
 import { runAgentChat } from "./ai";
 import { registerStripeRoutes } from "./stripe";
+import { executeWorkflowRun } from "./orchestrator";
 
 export async function registerRoutes(
   httpServer: Server,
@@ -275,6 +276,75 @@ Be concise, direct, and helpful. If asked to perform an action, explain what you
     } catch (err: any) {
       res.status(500).json({ error: err.message });
     }
+  });
+
+  // === WORKFLOW RUNS (Orchestrator) ===
+
+  // Get all runs for a workflow
+  app.get("/api/workflows/:id/runs", async (req, res) => {
+    const runs = await storage.getWorkflowRuns(Number(req.params.id));
+    res.json(runs);
+  });
+
+  // Get a specific run with its executions
+  app.get("/api/runs/:id", async (req, res) => {
+    const run = await storage.getWorkflowRun(Number(req.params.id));
+    if (!run) return res.status(404).json({ error: "Run not found" });
+    const executions = await storage.getAgentExecutions(run.id);
+    res.json({ run, executions });
+  });
+
+  // Start a new workflow run
+  app.post("/api/workflows/:id/run", async (req, res) => {
+    const workflowId = Number(req.params.id);
+    const { prompt, model } = req.body as { prompt: string; model?: string };
+
+    if (!prompt) return res.status(400).json({ error: "prompt is required" });
+
+    const workflow = await storage.getWorkflow(workflowId);
+    if (!workflow) return res.status(404).json({ error: "Workflow not found" });
+
+    // Check token budget
+    const plan = await storage.getUserPlan(1);
+    if (plan && plan.tokensUsed >= plan.monthlyTokens) {
+      return res.status(403).json({ error: "Monthly token limit reached. Buy more tokens or upgrade your plan." });
+    }
+
+    // Create the run
+    const run = await storage.createWorkflowRun({
+      workflowId,
+      userId: 1,
+      status: "pending",
+      executionMode: "boss",
+      inputData: JSON.stringify({ prompt }),
+    });
+
+    // Start orchestration in the background (don't block the response)
+    executeWorkflowRun(run.id, prompt, model || "claude-sonnet").catch(err => {
+      console.error(`[orchestrator] Run ${run.id} failed:`, err.message);
+    });
+
+    res.status(201).json(run);
+  });
+
+  // Kill a running workflow
+  app.post("/api/runs/:id/kill", async (req, res) => {
+    const run = await storage.getWorkflowRun(Number(req.params.id));
+    if (!run) return res.status(404).json({ error: "Run not found" });
+    if (run.status !== "running" && run.status !== "pending") {
+      return res.status(400).json({ error: "Run is not active" });
+    }
+    await storage.updateWorkflowRun(run.id, { status: "killed", completedAt: new Date().toISOString() });
+    res.json({ status: "killed" });
+  });
+
+  // Get latest run for a workflow (convenience)
+  app.get("/api/workflows/:id/latest-run", async (req, res) => {
+    const runs = await storage.getWorkflowRuns(Number(req.params.id));
+    if (!runs.length) return res.json(null);
+    const latestRun = runs[0]; // already ordered by desc id
+    const executions = await storage.getAgentExecutions(latestRun.id);
+    res.json({ run: latestRun, executions });
   });
 
   // === TOKEN ECONOMY ===
