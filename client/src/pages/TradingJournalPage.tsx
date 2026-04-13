@@ -12,6 +12,14 @@ import {
   Edit2,
   CheckCircle,
   Upload,
+  Link2,
+  RefreshCw,
+  Unlink,
+  Wifi,
+  ArrowUpRight,
+  ArrowDownLeft,
+  DollarSign,
+  Activity,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
@@ -674,6 +682,698 @@ function EquityCurveChart() {
   );
 }
 
+// ── Broker Types ───────────────────────────────────────────────────────────────
+type BrokerConnection = {
+  id: string;
+  userId: number;
+  broker: string;
+  label: string | null;
+  apiKey: string | null;
+  apiSecret: string | null;
+  isPaper: number;
+  isActive: number;
+  lastSyncAt: string | null;
+  accountId: string | null;
+  accountInfo: string | null;
+  createdAt: string;
+};
+
+type BrokerPosition = {
+  symbol: string;
+  qty: number;
+  side: string;
+  avgEntryPrice: number;
+  currentPrice: number;
+  unrealizedPnl: number;
+  marketValue: number;
+};
+
+type BrokerAccount = {
+  id: string;
+  cash: number;
+  portfolioValue: number;
+  buyingPower: number;
+  equity: number;
+};
+
+// ── Connect Broker Modal ────────────────────────────────────────────────────────
+function ConnectBrokerModal({ onClose }: { onClose: () => void }) {
+  const qc = useQueryClient();
+  const [form, setForm] = useState({
+    broker: "alpaca",
+    label: "",
+    apiKey: "",
+    apiSecret: "",
+    isPaper: true,
+  });
+  const [error, setError] = useState<string | null>(null);
+
+  const set = (k: string, v: any) => setForm((p) => ({ ...p, [k]: v }));
+
+  const mutation = useMutation({
+    mutationFn: async () => {
+      const res = await fetch("/api/broker-connections", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(form),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "Failed to connect");
+      return data;
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["/api/broker-connections"] });
+      onClose();
+    },
+    onError: (err: any) => setError(err.message),
+  });
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60">
+      <div className="bg-card border border-border rounded-xl p-6 w-full max-w-md shadow-2xl">
+        <div className="flex items-center justify-between mb-5">
+          <div className="flex items-center gap-2">
+            <Link2 className="w-4 h-4 text-indigo-400" />
+            <h3 className="font-semibold text-foreground">Connect Broker</h3>
+          </div>
+          <Button variant="ghost" size="icon" className="h-7 w-7" onClick={onClose}>
+            <X className="w-4 h-4" />
+          </Button>
+        </div>
+
+        <div className="space-y-4">
+          {/* Broker */}
+          <div>
+            <label className="text-xs text-muted-foreground font-medium block mb-1.5">Broker</label>
+            <select
+              className="w-full bg-background border border-border rounded-lg px-3 py-2 text-sm text-foreground outline-none focus:border-primary/60"
+              value={form.broker}
+              onChange={(e) => set("broker", e.target.value)}
+            >
+              <option value="alpaca">Alpaca</option>
+            </select>
+          </div>
+
+          {/* Label */}
+          <div>
+            <label className="text-xs text-muted-foreground font-medium block mb-1.5">
+              Label <span className="text-muted-foreground/60">(optional)</span>
+            </label>
+            <input
+              type="text"
+              placeholder="My Alpaca Paper Account"
+              className="w-full bg-background border border-border rounded-lg px-3 py-2 text-sm text-foreground placeholder:text-muted-foreground outline-none focus:border-primary/60"
+              value={form.label}
+              onChange={(e) => set("label", e.target.value)}
+            />
+          </div>
+
+          {/* API Key */}
+          <div>
+            <label className="text-xs text-muted-foreground font-medium block mb-1.5">API Key</label>
+            <input
+              type="text"
+              placeholder="PKXXXXXXXXXXXXXXXX"
+              className="w-full bg-background border border-border rounded-lg px-3 py-2 text-sm text-foreground placeholder:text-muted-foreground outline-none focus:border-primary/60 font-mono"
+              value={form.apiKey}
+              onChange={(e) => set("apiKey", e.target.value)}
+            />
+          </div>
+
+          {/* API Secret */}
+          <div>
+            <label className="text-xs text-muted-foreground font-medium block mb-1.5">API Secret</label>
+            <input
+              type="password"
+              placeholder="••••••••••••••••••••"
+              className="w-full bg-background border border-border rounded-lg px-3 py-2 text-sm text-foreground placeholder:text-muted-foreground outline-none focus:border-primary/60 font-mono"
+              value={form.apiSecret}
+              onChange={(e) => set("apiSecret", e.target.value)}
+            />
+          </div>
+
+          {/* Paper / Live toggle */}
+          <div>
+            <label className="text-xs text-muted-foreground font-medium block mb-1.5">Mode</label>
+            <div className="flex gap-2">
+              <button
+                type="button"
+                onClick={() => set("isPaper", true)}
+                className={`flex-1 py-2 rounded-lg text-sm font-medium transition-colors border ${
+                  form.isPaper
+                    ? "bg-indigo-500/20 border-indigo-500/40 text-indigo-400"
+                    : "bg-background border-border text-muted-foreground hover:text-foreground"
+                }`}
+              >
+                Paper Trading
+              </button>
+              <button
+                type="button"
+                onClick={() => set("isPaper", false)}
+                className={`flex-1 py-2 rounded-lg text-sm font-medium transition-colors border ${
+                  !form.isPaper
+                    ? "bg-amber-500/20 border-amber-500/40 text-amber-400"
+                    : "bg-background border-border text-muted-foreground hover:text-foreground"
+                }`}
+              >
+                Live Trading
+              </button>
+            </div>
+            {!form.isPaper && (
+              <p className="text-xs text-amber-400 mt-1.5">
+                Warning: Live trading uses real money. Orders will execute immediately.
+              </p>
+            )}
+          </div>
+
+          {error && (
+            <div className="bg-rose-500/10 border border-rose-500/30 rounded-lg px-3 py-2 text-xs text-rose-400">
+              {error}
+            </div>
+          )}
+        </div>
+
+        <div className="flex justify-end gap-3 mt-5">
+          <Button variant="ghost" onClick={onClose}>
+            Cancel
+          </Button>
+          <Button
+            className="bg-gradient-to-r from-indigo-500 to-violet-600 hover:from-indigo-600 hover:to-violet-700 text-white"
+            onClick={() => mutation.mutate()}
+            disabled={!form.apiKey || !form.apiSecret || mutation.isPending}
+          >
+            {mutation.isPending ? "Connecting..." : "Connect"}
+          </Button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ── Live Positions Panel ────────────────────────────────────────────────────────
+function LivePositionsPanel({ connectionId }: { connectionId: string }) {
+  const qc = useQueryClient();
+
+  const { data: positions = [], isLoading, error } = useQuery<BrokerPosition[]>({
+    queryKey: ["/api/broker-connections", connectionId, "positions"],
+    queryFn: () =>
+      fetch(`/api/broker-connections/${connectionId}/positions`).then((r) => r.json()),
+    refetchInterval: 30000,
+  });
+
+  const closeMutation = useMutation({
+    mutationFn: async (symbol: string) => {
+      const res = await fetch(
+        `/api/broker-connections/${connectionId}/positions/${symbol}`,
+        { method: "DELETE" }
+      );
+      if (!res.ok) throw new Error("Failed to close position");
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["/api/broker-connections", connectionId, "positions"] });
+    },
+  });
+
+  if (isLoading) {
+    return (
+      <div className="text-xs text-muted-foreground text-center py-3">
+        Loading positions...
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <div className="text-xs text-rose-400 py-2">
+        Could not load positions.
+      </div>
+    );
+  }
+
+  if (positions.length === 0) {
+    return (
+      <div className="text-xs text-muted-foreground py-2 text-center">
+        No open positions.
+      </div>
+    );
+  }
+
+  return (
+    <div className="mt-3 space-y-1.5">
+      {positions.map((p) => {
+        const pnlPositive = p.unrealizedPnl >= 0;
+        return (
+          <div
+            key={p.symbol}
+            className="flex items-center gap-3 bg-background/60 border border-border rounded-lg px-3 py-2 text-sm"
+          >
+            <span className="font-bold text-foreground min-w-[60px]">{p.symbol}</span>
+            <span
+              className={`text-xs px-2 py-0.5 rounded-full font-medium ${
+                p.side === "long"
+                  ? "bg-emerald-500/15 text-emerald-400"
+                  : "bg-rose-500/15 text-rose-400"
+              }`}
+            >
+              {p.side}
+            </span>
+            <div className="flex-1 flex items-center gap-4 text-xs text-muted-foreground flex-wrap">
+              <span>
+                Qty: <span className="text-foreground font-medium">{p.qty}</span>
+              </span>
+              <span>
+                Avg: <span className="text-foreground font-medium">${p.avgEntryPrice.toFixed(2)}</span>
+              </span>
+              <span>
+                Last: <span className="text-foreground font-medium">${p.currentPrice.toFixed(2)}</span>
+              </span>
+            </div>
+            <span
+              className={`text-sm font-bold min-w-[80px] text-right ${
+                pnlPositive ? "text-emerald-400" : "text-rose-400"
+              }`}
+            >
+              {pnlPositive ? "+" : ""}{fmt(p.unrealizedPnl)}
+            </span>
+            <button
+              onClick={() => {
+                if (confirm(`Close ${p.symbol} position?`)) closeMutation.mutate(p.symbol);
+              }}
+              title="Close position"
+              className="p-1.5 rounded-lg text-muted-foreground hover:text-rose-400 hover:bg-rose-500/10 transition-colors"
+            >
+              <X className="w-3.5 h-3.5" />
+            </button>
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
+// ── Broker Connection Card ──────────────────────────────────────────────────────
+function BrokerConnectionCard({ connection }: { connection: BrokerConnection }) {
+  const qc = useQueryClient();
+  const [showPositions, setShowPositions] = useState(false);
+
+  const { data: account } = useQuery<BrokerAccount>({
+    queryKey: ["/api/broker-connections", connection.id, "account"],
+    queryFn: () =>
+      fetch(`/api/broker-connections/${connection.id}/account`).then((r) => r.json()),
+    refetchInterval: 60000,
+  });
+
+  const deleteMutation = useMutation({
+    mutationFn: async () => {
+      const res = await fetch(`/api/broker-connections/${connection.id}`, {
+        method: "DELETE",
+      });
+      if (!res.ok) throw new Error("Delete failed");
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["/api/broker-connections"] });
+    },
+  });
+
+  const syncMutation = useMutation({
+    mutationFn: async () => {
+      const res = await fetch(`/api/broker-connections/${connection.id}/sync`, {
+        method: "POST",
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "Sync failed");
+      return data;
+    },
+    onSuccess: (data) => {
+      qc.invalidateQueries({ queryKey: ["/api/broker-connections"] });
+      qc.invalidateQueries({ queryKey: ["/api/trades"] });
+      qc.invalidateQueries({ queryKey: ["/api/trades/stats"] });
+      qc.invalidateQueries({ queryKey: ["/api/trades/equity-curve"] });
+      alert(`Synced ${data.imported} new trade(s).`);
+    },
+  });
+
+  const label = connection.label || `${connection.broker} account`;
+
+  return (
+    <div className="bg-card border border-border rounded-xl p-4">
+      <div className="flex items-start justify-between gap-3 flex-wrap">
+        <div className="flex items-center gap-3">
+          <div className="w-8 h-8 rounded-lg bg-indigo-500/15 flex items-center justify-center">
+            <Wifi className="w-4 h-4 text-indigo-400" />
+          </div>
+          <div>
+            <div className="flex items-center gap-2">
+              <span className="font-semibold text-foreground text-sm">{label}</span>
+              <span
+                className={`text-xs px-2 py-0.5 rounded-full font-medium ${
+                  connection.isPaper
+                    ? "bg-indigo-500/15 text-indigo-400"
+                    : "bg-amber-500/15 text-amber-400"
+                }`}
+              >
+                {connection.isPaper ? "Paper" : "Live"}
+              </span>
+            </div>
+            <p className="text-xs text-muted-foreground mt-0.5 capitalize">{connection.broker}</p>
+          </div>
+        </div>
+
+        {/* Account stats */}
+        {account && (
+          <div className="flex items-center gap-4 text-xs">
+            <div className="text-center">
+              <p className="text-muted-foreground">Equity</p>
+              <p className="font-semibold text-foreground">${account.equity.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</p>
+            </div>
+            <div className="text-center">
+              <p className="text-muted-foreground">Cash</p>
+              <p className="font-semibold text-foreground">${account.cash.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</p>
+            </div>
+            <div className="text-center">
+              <p className="text-muted-foreground">Buying Power</p>
+              <p className="font-semibold text-foreground">${account.buyingPower.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</p>
+            </div>
+          </div>
+        )}
+
+        {/* Actions */}
+        <div className="flex items-center gap-1.5">
+          <button
+            onClick={() => setShowPositions((p) => !p)}
+            className="flex items-center gap-1.5 px-2.5 py-1.5 text-xs font-medium rounded-lg bg-secondary text-muted-foreground hover:text-foreground transition-colors"
+          >
+            <Activity className="w-3.5 h-3.5" />
+            Positions
+          </button>
+          <button
+            onClick={() => syncMutation.mutate()}
+            disabled={syncMutation.isPending}
+            title="Sync trades"
+            className="flex items-center gap-1.5 px-2.5 py-1.5 text-xs font-medium rounded-lg bg-secondary text-muted-foreground hover:text-foreground transition-colors"
+          >
+            <RefreshCw className={`w-3.5 h-3.5 ${syncMutation.isPending ? "animate-spin" : ""}`} />
+            Sync
+          </button>
+          <button
+            onClick={() => {
+              if (confirm("Disconnect this broker account?")) deleteMutation.mutate();
+            }}
+            title="Disconnect"
+            className="flex items-center gap-1.5 px-2.5 py-1.5 text-xs font-medium rounded-lg text-muted-foreground hover:text-rose-400 hover:bg-rose-500/10 transition-colors"
+          >
+            <Unlink className="w-3.5 h-3.5" />
+            Disconnect
+          </button>
+        </div>
+      </div>
+
+      {connection.lastSyncAt && (
+        <p className="text-xs text-muted-foreground mt-2">
+          Last sync: {new Date(connection.lastSyncAt).toLocaleString()}
+        </p>
+      )}
+
+      {showPositions && <LivePositionsPanel connectionId={connection.id} />}
+    </div>
+  );
+}
+
+// ── Broker Connections Panel ────────────────────────────────────────────────────
+function BrokerConnectionsPanel() {
+  const [showModal, setShowModal] = useState(false);
+
+  const { data: connections = [], isLoading } = useQuery<BrokerConnection[]>({
+    queryKey: ["/api/broker-connections"],
+    queryFn: () => fetch("/api/broker-connections").then((r) => r.json()),
+  });
+
+  return (
+    <div className="bg-card border border-border rounded-xl p-5 mb-6">
+      {showModal && <ConnectBrokerModal onClose={() => setShowModal(false)} />}
+
+      <div className="flex items-center justify-between mb-4">
+        <div className="flex items-center gap-2">
+          <Link2 className="w-4 h-4 text-indigo-400" />
+          <h3 className="text-sm font-semibold text-foreground">Broker Connections</h3>
+          {connections.length > 0 && (
+            <span className="text-xs bg-emerald-500/15 text-emerald-400 px-2 py-0.5 rounded-full font-medium">
+              {connections.length} connected
+            </span>
+          )}
+        </div>
+        <Button
+          variant="outline"
+          size="sm"
+          onClick={() => setShowModal(true)}
+          className="text-xs h-7 gap-1.5"
+        >
+          <Plus className="w-3.5 h-3.5" />
+          Connect Broker
+        </Button>
+      </div>
+
+      {isLoading ? (
+        <p className="text-xs text-muted-foreground">Loading connections...</p>
+      ) : connections.length === 0 ? (
+        <div className="text-center py-6 border border-dashed border-border rounded-xl">
+          <Wifi className="w-8 h-8 text-muted-foreground/30 mx-auto mb-2" />
+          <p className="text-sm text-muted-foreground">No brokers connected</p>
+          <p className="text-xs text-muted-foreground/60 mt-0.5">
+            Connect Alpaca to auto-log trades and trade live
+          </p>
+        </div>
+      ) : (
+        <div className="space-y-3">
+          {connections.map((c) => (
+            <BrokerConnectionCard key={c.id} connection={c} />
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ── Quick Trade Panel ───────────────────────────────────────────────────────────
+function QuickTradePanel({ connections }: { connections: BrokerConnection[] }) {
+  const [selectedId, setSelectedId] = useState<string>(connections[0]?.id || "");
+  const [form, setForm] = useState({
+    symbol: "",
+    side: "buy" as "buy" | "sell",
+    qty: "1",
+    type: "market" as "market" | "limit",
+    limitPrice: "",
+  });
+  const [result, setResult] = useState<{ ok?: boolean; error?: string; message?: string } | null>(null);
+  const [loading, setLoading] = useState(false);
+
+  const set = (k: string, v: any) => setForm((p) => ({ ...p, [k]: v }));
+
+  const selectedConn = connections.find((c) => c.id === selectedId);
+
+  const handleOrder = async () => {
+    if (!selectedId || !form.symbol || !form.qty) return;
+    setLoading(true);
+    setResult(null);
+    try {
+      const payload: any = {
+        symbol: form.symbol.toUpperCase().trim(),
+        side: form.side,
+        qty: parseFloat(form.qty),
+        type: form.type,
+        timeInForce: "day",
+      };
+      if (form.type === "limit" && form.limitPrice) {
+        payload.limitPrice = parseFloat(form.limitPrice);
+      }
+      const res = await fetch(`/api/broker-connections/${selectedId}/orders`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        setResult({ error: data.error || "Order failed" });
+      } else {
+        setResult({ ok: true, message: `Order submitted: ${data.id || "success"}` });
+        setForm((p) => ({ ...p, symbol: "", qty: "1", limitPrice: "" }));
+      }
+    } catch (e: any) {
+      setResult({ error: e.message });
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  if (connections.length === 0) return null;
+
+  return (
+    <div className="bg-card border border-border rounded-xl p-5 mb-6">
+      <div className="flex items-center gap-2 mb-4">
+        <DollarSign className="w-4 h-4 text-emerald-400" />
+        <h3 className="text-sm font-semibold text-foreground">Quick Trade</h3>
+        {selectedConn && (
+          <span
+            className={`text-xs px-2 py-0.5 rounded-full font-medium ${
+              selectedConn.isPaper
+                ? "bg-indigo-500/15 text-indigo-400"
+                : "bg-amber-500/15 text-amber-400"
+            }`}
+          >
+            {selectedConn.isPaper ? "Paper" : "LIVE"}
+          </span>
+        )}
+      </div>
+
+      <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+        {/* Account selector */}
+        {connections.length > 1 && (
+          <div className="col-span-2 sm:col-span-4">
+            <label className="text-xs text-muted-foreground font-medium block mb-1.5">Account</label>
+            <select
+              className="w-full bg-background border border-border rounded-lg px-3 py-2 text-sm text-foreground outline-none focus:border-primary/60"
+              value={selectedId}
+              onChange={(e) => setSelectedId(e.target.value)}
+            >
+              {connections.map((c) => (
+                <option key={c.id} value={c.id}>
+                  {c.label || c.broker} ({c.isPaper ? "Paper" : "Live"})
+                </option>
+              ))}
+            </select>
+          </div>
+        )}
+
+        {/* Symbol */}
+        <div>
+          <label className="text-xs text-muted-foreground font-medium block mb-1.5">Symbol</label>
+          <input
+            type="text"
+            placeholder="AAPL"
+            className="w-full bg-background border border-border rounded-lg px-3 py-2 text-sm text-foreground placeholder:text-muted-foreground outline-none focus:border-primary/60 uppercase"
+            value={form.symbol}
+            onChange={(e) => set("symbol", e.target.value)}
+          />
+        </div>
+
+        {/* Qty */}
+        <div>
+          <label className="text-xs text-muted-foreground font-medium block mb-1.5">Quantity</label>
+          <input
+            type="number"
+            min="1"
+            step="1"
+            placeholder="1"
+            className="w-full bg-background border border-border rounded-lg px-3 py-2 text-sm text-foreground placeholder:text-muted-foreground outline-none focus:border-primary/60"
+            value={form.qty}
+            onChange={(e) => set("qty", e.target.value)}
+          />
+        </div>
+
+        {/* Order type */}
+        <div>
+          <label className="text-xs text-muted-foreground font-medium block mb-1.5">Order Type</label>
+          <div className="flex gap-1.5">
+            <button
+              type="button"
+              onClick={() => set("type", "market")}
+              className={`flex-1 py-2 rounded-lg text-xs font-medium transition-colors border ${
+                form.type === "market"
+                  ? "bg-primary/20 border-primary/40 text-primary"
+                  : "bg-background border-border text-muted-foreground hover:text-foreground"
+              }`}
+            >
+              Market
+            </button>
+            <button
+              type="button"
+              onClick={() => set("type", "limit")}
+              className={`flex-1 py-2 rounded-lg text-xs font-medium transition-colors border ${
+                form.type === "limit"
+                  ? "bg-primary/20 border-primary/40 text-primary"
+                  : "bg-background border-border text-muted-foreground hover:text-foreground"
+              }`}
+            >
+              Limit
+            </button>
+          </div>
+        </div>
+
+        {/* Limit price (conditonal) */}
+        {form.type === "limit" ? (
+          <div>
+            <label className="text-xs text-muted-foreground font-medium block mb-1.5">Limit Price</label>
+            <input
+              type="number"
+              step="0.01"
+              placeholder="0.00"
+              className="w-full bg-background border border-border rounded-lg px-3 py-2 text-sm text-foreground placeholder:text-muted-foreground outline-none focus:border-primary/60"
+              value={form.limitPrice}
+              onChange={(e) => set("limitPrice", e.target.value)}
+            />
+          </div>
+        ) : (
+          <div /> // spacer
+        )}
+
+        {/* Buy / Sell + Place Order */}
+        <div className="col-span-2 sm:col-span-4 flex gap-3 mt-1">
+          <button
+            type="button"
+            onClick={() => set("side", "buy")}
+            className={`flex items-center gap-1.5 px-4 py-2 rounded-lg text-sm font-medium transition-colors border ${
+              form.side === "buy"
+                ? "bg-emerald-500/20 border-emerald-500/40 text-emerald-400"
+                : "bg-background border-border text-muted-foreground hover:text-foreground"
+            }`}
+          >
+            <ArrowUpRight className="w-4 h-4" />
+            Buy
+          </button>
+          <button
+            type="button"
+            onClick={() => set("side", "sell")}
+            className={`flex items-center gap-1.5 px-4 py-2 rounded-lg text-sm font-medium transition-colors border ${
+              form.side === "sell"
+                ? "bg-rose-500/20 border-rose-500/40 text-rose-400"
+                : "bg-background border-border text-muted-foreground hover:text-foreground"
+            }`}
+          >
+            <ArrowDownLeft className="w-4 h-4" />
+            Sell
+          </button>
+          <div className="flex-1" />
+          <Button
+            onClick={handleOrder}
+            disabled={loading || !form.symbol || !form.qty || (form.type === "limit" && !form.limitPrice)}
+            className={`${
+              form.side === "buy"
+                ? "bg-emerald-600 hover:bg-emerald-700"
+                : "bg-rose-600 hover:bg-rose-700"
+            } text-white`}
+          >
+            {loading
+              ? "Placing..."
+              : `Place ${form.type === "market" ? "Market" : "Limit"} ${form.side === "buy" ? "Buy" : "Sell"}`}
+          </Button>
+        </div>
+      </div>
+
+      {result && (
+        <div
+          className={`mt-3 text-xs rounded-lg px-3 py-2 border ${
+            result.ok
+              ? "bg-emerald-500/10 border-emerald-500/30 text-emerald-400"
+              : "bg-rose-500/10 border-rose-500/30 text-rose-400"
+          }`}
+        >
+          {result.ok ? result.message : result.error}
+        </div>
+      )}
+    </div>
+  );
+}
+
 // ── Main Page ──────────────────────────────────────────────────────────────────
 export default function TradingJournalPage() {
   const [showForm, setShowForm] = useState(false);
@@ -695,6 +1395,11 @@ export default function TradingJournalPage() {
     queryFn: () => fetch("/api/trades/stats").then((r) => r.json()),
   });
 
+  const { data: brokerConnections = [] } = useQuery<BrokerConnection[]>({
+    queryKey: ["/api/broker-connections"],
+    queryFn: () => fetch("/api/broker-connections").then((r) => r.json()),
+  });
+
   const netPnl = stats?.netPnl ?? 0;
 
   return (
@@ -713,6 +1418,14 @@ export default function TradingJournalPage() {
           Add Trade
         </Button>
       </div>
+
+      {/* Broker Connections Panel */}
+      <BrokerConnectionsPanel />
+
+      {/* Quick Trade Panel (only when broker is connected) */}
+      {brokerConnections.length > 0 && (
+        <QuickTradePanel connections={brokerConnections} />
+      )}
 
       {/* Stats Row */}
       <div className="grid grid-cols-3 gap-4 mb-4 sm:grid-cols-6">

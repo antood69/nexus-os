@@ -727,5 +727,131 @@ export async function registerRoutes(
     res.json(closed);
   });
 
+  // ── Broker Connections ────────────────────────────────────────────────
+  app.get("/api/broker-connections", async (req, res) => {
+    const userId = req.user?.id || 1;
+    const connections = await storage.getBrokerConnections(userId);
+    // Mask secrets before returning
+    res.json(
+      connections.map((c) => ({
+        ...c,
+        apiSecret: c.apiSecret ? "••••••" + c.apiSecret.slice(-4) : null,
+      }))
+    );
+  });
+
+  app.post("/api/broker-connections", async (req, res) => {
+    const userId = req.user?.id || 1;
+    const { broker, label, apiKey, apiSecret, isPaper } = req.body;
+    if (!broker || !apiKey || !apiSecret) {
+      return res.status(400).json({ error: "Broker, API key, and secret are required" });
+    }
+    try {
+      const { getBroker } = await import("./broker");
+      const b = getBroker({ broker, apiKey, apiSecret, isPaper: isPaper ? 1 : 0 });
+      const account = await b.getAccount();
+
+      const connection = await storage.createBrokerConnection({
+        userId,
+        broker,
+        label: label || `${broker} ${isPaper ? "Paper" : "Live"}`,
+        apiKey,
+        apiSecret,
+        isPaper: isPaper ? 1 : 0,
+        accountId: account.id,
+        accountInfo: JSON.stringify(account),
+      });
+
+      res.status(201).json({
+        ...connection,
+        apiSecret: connection.apiSecret ? "••••••" + connection.apiSecret.slice(-4) : null,
+      });
+    } catch (err: any) {
+      res.status(400).json({ error: `Failed to connect: ${err.message}` });
+    }
+  });
+
+  app.delete("/api/broker-connections/:id", async (req, res) => {
+    const userId = req.user?.id || 1;
+    const conn = await storage.getBrokerConnection(req.params.id);
+    if (!conn || conn.userId !== userId) return res.status(404).json({ error: "Not found" });
+    await storage.deleteBrokerConnection(req.params.id);
+    res.json({ ok: true });
+  });
+
+  // Get live account info
+  app.get("/api/broker-connections/:id/account", async (req, res) => {
+    const userId = req.user?.id || 1;
+    const conn = await storage.getBrokerConnection(req.params.id);
+    if (!conn || conn.userId !== userId) return res.status(404).json({ error: "Not found" });
+    try {
+      const { getBroker } = await import("./broker");
+      const broker = getBroker(conn);
+      const account = await broker.getAccount();
+      res.json(account);
+    } catch (err: any) {
+      res.status(500).json({ error: err.message });
+    }
+  });
+
+  // Get live positions
+  app.get("/api/broker-connections/:id/positions", async (req, res) => {
+    const userId = req.user?.id || 1;
+    const conn = await storage.getBrokerConnection(req.params.id);
+    if (!conn || conn.userId !== userId) return res.status(404).json({ error: "Not found" });
+    try {
+      const { getBroker } = await import("./broker");
+      const broker = getBroker(conn);
+      const positions = await broker.getPositions();
+      res.json(positions);
+    } catch (err: any) {
+      res.status(500).json({ error: err.message });
+    }
+  });
+
+  // Place order (LIVE TRADING)
+  app.post("/api/broker-connections/:id/orders", async (req, res) => {
+    const userId = req.user?.id || 1;
+    const conn = await storage.getBrokerConnection(req.params.id);
+    if (!conn || conn.userId !== userId) return res.status(404).json({ error: "Not found" });
+    try {
+      const { getBroker } = await import("./broker");
+      const broker = getBroker(conn);
+      const order = await broker.placeOrder(req.body);
+      res.json(order);
+    } catch (err: any) {
+      res.status(500).json({ error: err.message });
+    }
+  });
+
+  // Close position
+  app.delete("/api/broker-connections/:id/positions/:symbol", async (req, res) => {
+    const userId = req.user?.id || 1;
+    const conn = await storage.getBrokerConnection(req.params.id);
+    if (!conn || conn.userId !== userId) return res.status(404).json({ error: "Not found" });
+    try {
+      const { getBroker } = await import("./broker");
+      const broker = getBroker(conn);
+      const result = await broker.closePosition(req.params.symbol);
+      res.json(result);
+    } catch (err: any) {
+      res.status(500).json({ error: err.message });
+    }
+  });
+
+  // Sync trades from broker
+  app.post("/api/broker-connections/:id/sync", async (req, res) => {
+    const userId = req.user?.id || 1;
+    const conn = await storage.getBrokerConnection(req.params.id);
+    if (!conn || conn.userId !== userId) return res.status(404).json({ error: "Not found" });
+    try {
+      const { syncTrades } = await import("./broker");
+      const result = await syncTrades(req.params.id, userId);
+      res.json(result);
+    } catch (err: any) {
+      res.status(500).json({ error: err.message });
+    }
+  });
+
   return httpServer;
 }

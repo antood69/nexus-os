@@ -357,6 +357,21 @@ sqlite.exec(`
     notes TEXT,
     created_at TEXT DEFAULT (datetime('now'))
   );
+
+  CREATE TABLE IF NOT EXISTS broker_connections (
+    id TEXT PRIMARY KEY,
+    user_id INTEGER NOT NULL,
+    broker TEXT NOT NULL,
+    label TEXT,
+    api_key TEXT,
+    api_secret TEXT,
+    is_paper INTEGER DEFAULT 1,
+    is_active INTEGER DEFAULT 1,
+    last_sync_at TEXT,
+    account_id TEXT,
+    account_info TEXT,
+    created_at TEXT DEFAULT (datetime('now'))
+  );
 `);
 
 // Safe ALTER TABLE for existing DBs that lack new columns
@@ -443,6 +458,22 @@ export interface TradingStats {
   currentWinStreak: number;
   currentLossStreak: number;
   bestWinStreak: number;
+}
+
+// ── Broker Connection types ──────────────────────────────────────────────────
+export interface BrokerConnection {
+  id: string;
+  userId: number;
+  broker: string;
+  label: string | null;
+  apiKey: string | null;
+  apiSecret: string | null;
+  isPaper: number;
+  isActive: number;
+  lastSyncAt: string | null;
+  accountId: string | null;
+  accountInfo: string | null;
+  createdAt: string;
 }
 
 export interface UserPreferences {
@@ -597,6 +628,12 @@ export interface IStorage {
   getMonthlyPnl(userId: number): Promise<{ month: string; pnl: number }[]>;
   getPnlBySymbol(userId: number): Promise<{ symbol: string; pnl: number; tradeCount: number }[]>;
   getPnlByDayOfWeek(userId: number): Promise<{ day: string; pnl: number; tradeCount: number }[]>;
+  // Broker Connections
+  createBrokerConnection(data: { userId: number; broker: string; label?: string | null; apiKey?: string | null; apiSecret?: string | null; isPaper?: number; accountId?: string | null; accountInfo?: string | null }): Promise<BrokerConnection>;
+  getBrokerConnections(userId: number): Promise<BrokerConnection[]>;
+  getBrokerConnection(id: string): Promise<BrokerConnection | undefined>;
+  updateBrokerConnection(id: string, data: Partial<Omit<BrokerConnection, 'id' | 'userId' | 'createdAt'>>): Promise<BrokerConnection | undefined>;
+  deleteBrokerConnection(id: string): Promise<void>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -1520,6 +1557,89 @@ export class DatabaseStorage implements IStorage {
       ORDER BY cast(strftime('%w', entry_time) as integer)
     `).all(userId) as any[];
     return rows.map(r => ({ day: r.day, pnl: Math.round((r.pnl ?? 0) * 100) / 100, tradeCount: r.trade_count }));
+  }
+
+  // ── Broker Connections ────────────────────────────────────────────────────
+  private mapBrokerConnection(row: any): BrokerConnection {
+    return {
+      id: row.id,
+      userId: row.user_id,
+      broker: row.broker,
+      label: row.label,
+      apiKey: row.api_key,
+      apiSecret: row.api_secret,
+      isPaper: row.is_paper,
+      isActive: row.is_active,
+      lastSyncAt: row.last_sync_at,
+      accountId: row.account_id,
+      accountInfo: row.account_info,
+      createdAt: row.created_at,
+    };
+  }
+
+  async createBrokerConnection(data: {
+    userId: number;
+    broker: string;
+    label?: string | null;
+    apiKey?: string | null;
+    apiSecret?: string | null;
+    isPaper?: number;
+    accountId?: string | null;
+    accountInfo?: string | null;
+  }): Promise<BrokerConnection> {
+    const id = `bc_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
+    sqlite.prepare(`
+      INSERT INTO broker_connections (id, user_id, broker, label, api_key, api_secret, is_paper, account_id, account_info)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+    `).run(
+      id,
+      data.userId,
+      data.broker,
+      data.label ?? null,
+      data.apiKey ?? null,
+      data.apiSecret ?? null,
+      data.isPaper ?? 1,
+      data.accountId ?? null,
+      data.accountInfo ?? null,
+    );
+    return this.getBrokerConnection(id) as Promise<BrokerConnection>;
+  }
+
+  async getBrokerConnections(userId: number): Promise<BrokerConnection[]> {
+    const rows = sqlite.prepare(
+      `SELECT * FROM broker_connections WHERE user_id = ? ORDER BY created_at DESC`
+    ).all(userId) as any[];
+    return rows.map(r => this.mapBrokerConnection(r));
+  }
+
+  async getBrokerConnection(id: string): Promise<BrokerConnection | undefined> {
+    const row = sqlite.prepare(`SELECT * FROM broker_connections WHERE id = ?`).get(id) as any;
+    if (!row) return undefined;
+    return this.mapBrokerConnection(row);
+  }
+
+  async updateBrokerConnection(id: string, data: Partial<Omit<BrokerConnection, 'id' | 'userId' | 'createdAt'>>): Promise<BrokerConnection | undefined> {
+    const existing = await this.getBrokerConnection(id);
+    if (!existing) return undefined;
+    const fields: string[] = [];
+    const values: any[] = [];
+    if (data.broker !== undefined) { fields.push('broker = ?'); values.push(data.broker); }
+    if (data.label !== undefined) { fields.push('label = ?'); values.push(data.label); }
+    if (data.apiKey !== undefined) { fields.push('api_key = ?'); values.push(data.apiKey); }
+    if (data.apiSecret !== undefined) { fields.push('api_secret = ?'); values.push(data.apiSecret); }
+    if (data.isPaper !== undefined) { fields.push('is_paper = ?'); values.push(data.isPaper); }
+    if (data.isActive !== undefined) { fields.push('is_active = ?'); values.push(data.isActive); }
+    if (data.lastSyncAt !== undefined) { fields.push('last_sync_at = ?'); values.push(data.lastSyncAt); }
+    if (data.accountId !== undefined) { fields.push('account_id = ?'); values.push(data.accountId); }
+    if (data.accountInfo !== undefined) { fields.push('account_info = ?'); values.push(data.accountInfo); }
+    if (fields.length === 0) return existing;
+    values.push(id);
+    sqlite.prepare(`UPDATE broker_connections SET ${fields.join(', ')} WHERE id = ?`).run(...values);
+    return this.getBrokerConnection(id);
+  }
+
+  async deleteBrokerConnection(id: string): Promise<void> {
+    sqlite.prepare(`DELETE FROM broker_connections WHERE id = ?`).run(id);
   }
 }
 
