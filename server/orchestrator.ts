@@ -161,7 +161,7 @@ export async function executeWorkflowRun(
   // ── Pre-flight: check token budget ─────────────────────────────────────
   const plan = await storage.getUserPlan(1);
   if (plan) {
-    const remaining = plan.tokensIncluded + plan.tokensAddon - plan.tokensUsed;
+    const remaining = plan.monthlyTokens - plan.tokensUsed;
     if (remaining <= 0) {
       await storage.updateWorkflowRun(runId, {
         status: "failed",

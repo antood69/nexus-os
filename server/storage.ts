@@ -21,8 +21,103 @@ import { eq, desc, gte } from "drizzle-orm";
 const sqlite = new Database("data.db");
 sqlite.pragma("journal_mode = WAL");
 
-// Auto-create new Phase 2 tables if they don't exist
+// Auto-create ALL tables if they don't exist (covers fresh deploys)
 sqlite.exec(`
+  CREATE TABLE IF NOT EXISTS users (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    username TEXT NOT NULL UNIQUE,
+    password TEXT NOT NULL,
+    tier TEXT NOT NULL DEFAULT 'free',
+    stripe_customer_id TEXT,
+    subscription_id TEXT
+  );
+  CREATE TABLE IF NOT EXISTS workflows (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    name TEXT NOT NULL,
+    description TEXT,
+    status TEXT NOT NULL DEFAULT 'draft',
+    priority TEXT NOT NULL DEFAULT 'medium',
+    created_at TEXT NOT NULL DEFAULT ''
+  );
+  CREATE TABLE IF NOT EXISTS agents (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    name TEXT NOT NULL,
+    role TEXT NOT NULL,
+    model TEXT NOT NULL DEFAULT 'claude-sonnet',
+    workflow_id INTEGER,
+    status TEXT NOT NULL DEFAULT 'idle',
+    system_prompt TEXT,
+    created_at TEXT NOT NULL DEFAULT ''
+  );
+  CREATE TABLE IF NOT EXISTS jobs (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    workflow_id INTEGER NOT NULL,
+    agent_id INTEGER,
+    title TEXT NOT NULL,
+    status TEXT NOT NULL DEFAULT 'queued',
+    result TEXT,
+    created_at TEXT NOT NULL DEFAULT ''
+  );
+  CREATE TABLE IF NOT EXISTS messages (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    agent_id INTEGER NOT NULL,
+    role TEXT NOT NULL,
+    content TEXT NOT NULL,
+    created_at TEXT NOT NULL DEFAULT ''
+  );
+  CREATE TABLE IF NOT EXISTS audit_reviews (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    job_id INTEGER NOT NULL,
+    agent_id INTEGER NOT NULL,
+    verdict TEXT NOT NULL,
+    notes TEXT,
+    created_at TEXT NOT NULL DEFAULT ''
+  );
+  CREATE TABLE IF NOT EXISTS escalations (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    job_id INTEGER NOT NULL,
+    agent_id INTEGER,
+    level INTEGER NOT NULL DEFAULT 1,
+    reason TEXT NOT NULL,
+    context TEXT,
+    status TEXT NOT NULL DEFAULT 'pending',
+    resolution TEXT,
+    created_at TEXT NOT NULL DEFAULT ''
+  );
+  CREATE TABLE IF NOT EXISTS trade_journal (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    firm TEXT NOT NULL,
+    instrument TEXT NOT NULL,
+    direction TEXT NOT NULL,
+    entry_price TEXT NOT NULL,
+    exit_price TEXT,
+    pnl TEXT,
+    risk_reward TEXT,
+    entry_reason TEXT,
+    ai_analysis TEXT,
+    tags TEXT,
+    status TEXT NOT NULL DEFAULT 'open',
+    opened_at TEXT NOT NULL DEFAULT '',
+    closed_at TEXT,
+    created_at TEXT NOT NULL DEFAULT ''
+  );
+  CREATE TABLE IF NOT EXISTS bot_challenges (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    name TEXT NOT NULL,
+    firm TEXT NOT NULL,
+    account_size INTEGER NOT NULL DEFAULT 100000,
+    profit_target TEXT NOT NULL,
+    max_drawdown TEXT NOT NULL,
+    daily_drawdown TEXT NOT NULL,
+    consistency_rule TEXT,
+    status TEXT NOT NULL DEFAULT 'running',
+    current_pnl TEXT DEFAULT '0',
+    peak_balance TEXT,
+    bot_config TEXT,
+    started_at TEXT NOT NULL DEFAULT '',
+    ended_at TEXT,
+    created_at TEXT NOT NULL DEFAULT ''
+  );
   CREATE TABLE IF NOT EXISTS token_usage (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     user_id INTEGER NOT NULL,
