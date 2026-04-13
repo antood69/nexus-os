@@ -2,7 +2,8 @@ import { Resend } from "resend";
 import { storage } from "./storage";
 import { v4 as uuidv4 } from "uuid";
 
-const resend = new Resend(process.env.RESEND_API_KEY || "");
+const RESEND_KEY = process.env.RESEND_API_KEY;
+const resend = RESEND_KEY ? new Resend(RESEND_KEY) : null;
 const FROM_EMAIL = process.env.FROM_EMAIL || "NEXUS OS <noreply@nexus-os.dev>";
 const APP_URL = process.env.APP_URL || "https://nexus-os-production-50a1.up.railway.app";
 
@@ -106,6 +107,7 @@ export async function sendVerificationEmail(userId: number, email: string, displ
 
     const verifyUrl = `${APP_URL}/api/auth/verify-email?token=${token}`;
 
+    if (!resend) { console.log("[email] Resend not configured, skipping verification email"); return true; }
     await resend.emails.send({
       from: FROM_EMAIL,
       to: email,
@@ -130,6 +132,7 @@ export async function sendVerificationEmail(userId: number, email: string, displ
 
 export async function sendLoginAlertEmail(userId: number, email: string, displayName: string, ipAddress: string): Promise<void> {
   try {
+    if (!resend) { console.log("[email] Resend not configured, skipping login alert"); return; }
     const loginTime = new Date().toLocaleString("en-US", {
       weekday: "long",
       year: "numeric",
@@ -161,6 +164,7 @@ export async function sendLoginAlertEmail(userId: number, email: string, display
 
 export async function sendWelcomeEmail(email: string, displayName: string): Promise<void> {
   try {
+    if (!resend) { console.log("[email] Resend not configured, skipping welcome email"); return; }
     await resend.emails.send({
       from: FROM_EMAIL,
       to: email,
