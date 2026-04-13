@@ -870,6 +870,87 @@ export async function registerRoutes(
     }
   });
 
+  // ── User API Keys ─────────────────────────────────────────────────────────
+  app.get("/api/user-api-keys", async (req, res) => {
+    const userId = req.user?.id || 1;
+    const keys = await storage.getUserApiKeys(userId);
+    // Mask API keys in response
+    const masked = keys.map(k => ({
+      ...k,
+      apiKey: k.apiKey ? k.apiKey.slice(0, 8) + "..." + k.apiKey.slice(-4) : null,
+    }));
+    res.json(masked);
+  });
+
+  app.post("/api/user-api-keys", async (req, res) => {
+    const userId = req.user?.id || 1;
+    const { provider, apiKey, endpointUrl, defaultModel, isDefault } = req.body;
+    if (!provider) return res.status(400).json({ error: "provider is required" });
+    const key = await storage.createUserApiKey({ userId, provider, apiKey, endpointUrl, defaultModel, isDefault: isDefault ? 1 : 0 });
+    res.status(201).json(key);
+  });
+
+  app.patch("/api/user-api-keys/:id", async (req, res) => {
+    const { provider, apiKey, endpointUrl, defaultModel, isDefault, isActive } = req.body;
+    const updates: any = {};
+    if (provider !== undefined) updates.provider = provider;
+    if (apiKey !== undefined) updates.apiKey = apiKey;
+    if (endpointUrl !== undefined) updates.endpointUrl = endpointUrl;
+    if (defaultModel !== undefined) updates.defaultModel = defaultModel;
+    if (isDefault !== undefined) updates.isDefault = isDefault ? 1 : 0;
+    if (isActive !== undefined) updates.isActive = isActive ? 1 : 0;
+    const updated = await storage.updateUserApiKey(req.params.id, updates);
+    if (!updated) return res.status(404).json({ error: "not found" });
+    res.json(updated);
+  });
+
+  app.delete("/api/user-api-keys/:id", async (req, res) => {
+    await storage.deleteUserApiKey(req.params.id);
+    res.json({ ok: true });
+  });
+
+  app.post("/api/user-api-keys/:id/test", async (req, res) => {
+    const key = await storage.getUserApiKey(req.params.id);
+    if (!key) return res.status(404).json({ error: "not found" });
+    try {
+      let success = false;
+      if (key.provider === "openai") {
+        const r = await fetch("https://api.openai.com/v1/models", { headers: { Authorization: `Bearer ${key.apiKey}` } });
+        success = r.ok;
+      } else if (key.provider === "anthropic") {
+        const r = await fetch("https://api.anthropic.com/v1/messages", {
+          method: "POST",
+          headers: { "x-api-key": key.apiKey || "", "anthropic-version": "2023-06-01", "Content-Type": "application/json" },
+          body: JSON.stringify({ model: "claude-3-haiku-20240307", max_tokens: 1, messages: [{ role: "user", content: "hi" }] }),
+        });
+        success = r.ok;
+      } else if (key.provider === "google") {
+        const r = await fetch(`https://generativelanguage.googleapis.com/v1/models?key=${key.apiKey}`);
+        success = r.ok;
+      } else if (key.provider === "groq") {
+        const r = await fetch("https://api.groq.com/openai/v1/models", { headers: { Authorization: `Bearer ${key.apiKey}` } });
+        success = r.ok;
+      } else if (key.provider === "mistral") {
+        const r = await fetch("https://api.mistral.ai/v1/models", { headers: { Authorization: `Bearer ${key.apiKey}` } });
+        success = r.ok;
+      } else if (key.provider === "ollama") {
+        const url = key.endpointUrl || "http://localhost:11434";
+        const r = await fetch(`${url}/api/tags`);
+        success = r.ok;
+      }
+      res.json({ success });
+    } catch (err: any) {
+      res.json({ success: false, error: err.message });
+    }
+  });
+
+  app.get("/api/user-api-keys/default", async (req, res) => {
+    const userId = req.user?.id || 1;
+    const key = await storage.getDefaultApiKey(userId);
+    if (!key) return res.json(null);
+    res.json({ ...key, apiKey: key.apiKey ? key.apiKey.slice(0, 8) + "..." + key.apiKey.slice(-4) : null });
+  });
+
   // ── Account Stacks ────────────────────────────────────────────────────────
   app.get("/api/account-stacks", async (req, res) => {
     const userId = req.user?.id || 1;

@@ -3,6 +3,7 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { Play, Trophy, AlertTriangle, Activity, Target, Zap, Bot, Plus, Trash2, Sparkles, Code, Clock } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { apiRequest } from "@/lib/queryClient";
+import ModelSelector from "@/components/ModelSelector";
 
 type BotChallenge = {
   id: number;
@@ -449,11 +450,14 @@ export default function BotChallengePage() {
   return (
     <div className="p-6 max-w-5xl mx-auto">
       {/* Header */}
-      <div className="mb-4">
-        <h1 className="text-2xl font-bold text-foreground">Bot Challenge Simulator</h1>
-        <p className="text-sm text-muted-foreground mt-0.5">
-          Test your bot against real prop firm rules before paying
-        </p>
+      <div className="flex items-center justify-between mb-4">
+        <div>
+          <h1 className="text-2xl font-bold text-foreground">Bot Challenge Simulator</h1>
+          <p className="text-sm text-muted-foreground mt-0.5">
+            Test your bot against real prop firm rules before paying
+          </p>
+        </div>
+        <ModelSelector />
       </div>
 
       {/* Tab Bar */}

@@ -1,5 +1,6 @@
 import { useState, useRef, useEffect, useCallback } from "react";
 import { Bot, Send, Plus, MessageSquare, Copy, Check, ChevronLeft, ChevronRight } from "lucide-react";
+import ModelSelector from "@/components/ModelSelector";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -286,6 +287,7 @@ export default function BossPage() {
   const [error, setError] = useState<string | null>(null);
   const [sidebarOpen, setSidebarOpen] = useState(true);
   const [isMobile, setIsMobile] = useState(false);
+  const [selectedModel, setSelectedModel] = useState<{ provider: string; model: string } | null>(null);
 
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
@@ -607,11 +609,14 @@ export default function BossPage() {
               <p className="text-[10px] text-muted-foreground">
                 Enter to send · Shift+Enter for newline
               </p>
-              {charCount > 0 && (
-                <p className={`text-[10px] ${charCount > 2000 ? "text-destructive" : "text-muted-foreground"}`}>
-                  {charCount.toLocaleString()}
-                </p>
-              )}
+              <div className="flex items-center gap-2">
+                <ModelSelector value={selectedModel} onChange={setSelectedModel} compact />
+                {charCount > 0 && (
+                  <p className={`text-[10px] ${charCount > 2000 ? "text-destructive" : "text-muted-foreground"}`}>
+                    {charCount.toLocaleString()}
+                  </p>
+                )}
+              </div>
             </div>
           </div>
         </div>

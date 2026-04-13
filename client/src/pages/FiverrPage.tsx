@@ -3,6 +3,7 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { Briefcase, Plus, Trash2, Eye, Sparkles, DollarSign, Package, CheckCircle } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { apiRequest } from "@/lib/queryClient";
+import ModelSelector from "@/components/ModelSelector";
 
 type FiverrGig = {
   id: string;
@@ -84,6 +85,7 @@ export default function FiverrPage() {
           </h1>
           <p className="text-sm text-muted-foreground mt-1">Manage gigs, auto-generate deliverables with AI.</p>
         </div>
+        <ModelSelector />
       </div>
 
       {/* Stats */}

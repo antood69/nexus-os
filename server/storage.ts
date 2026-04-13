@@ -373,6 +373,18 @@ sqlite.exec(`
     created_at TEXT DEFAULT (datetime('now'))
   );
 
+  CREATE TABLE IF NOT EXISTS user_api_keys (
+    id TEXT PRIMARY KEY,
+    user_id INTEGER NOT NULL,
+    provider TEXT NOT NULL,
+    api_key TEXT,
+    endpoint_url TEXT,
+    default_model TEXT,
+    is_default INTEGER DEFAULT 0,
+    is_active INTEGER DEFAULT 1,
+    created_at TEXT DEFAULT (datetime('now'))
+  );
+
   CREATE TABLE IF NOT EXISTS account_stacks (
     id TEXT PRIMARY KEY,
     user_id INTEGER NOT NULL,
@@ -600,6 +612,19 @@ export interface BrokerConnection {
   lastSyncAt: string | null;
   accountId: string | null;
   accountInfo: string | null;
+  createdAt: string;
+}
+
+// ── User API Keys types ──────────────────────────────────────────────────────
+export interface UserApiKey {
+  id: string;
+  userId: number;
+  provider: string; // openai | anthropic | google | mistral | groq | ollama
+  apiKey: string | null;
+  endpointUrl: string | null;
+  defaultModel: string | null;
+  isDefault: number;
+  isActive: number;
   createdAt: string;
 }
 
@@ -895,6 +920,13 @@ export interface IStorage {
   getBrokerConnection(id: string): Promise<BrokerConnection | undefined>;
   updateBrokerConnection(id: string, data: Partial<Omit<BrokerConnection, 'id' | 'userId' | 'createdAt'>>): Promise<BrokerConnection | undefined>;
   deleteBrokerConnection(id: string): Promise<void>;
+  // User API Keys
+  getUserApiKeys(userId: number): Promise<UserApiKey[]>;
+  getUserApiKey(id: string): Promise<UserApiKey | undefined>;
+  createUserApiKey(data: { userId: number; provider: string; apiKey?: string; endpointUrl?: string; defaultModel?: string; isDefault?: number }): Promise<UserApiKey>;
+  updateUserApiKey(id: string, data: Partial<Omit<UserApiKey, 'id' | 'userId' | 'createdAt'>>): Promise<UserApiKey | undefined>;
+  deleteUserApiKey(id: string): Promise<void>;
+  getDefaultApiKey(userId: number): Promise<UserApiKey | undefined>;
   // Account Stacks
   getAccountStacks(userId: number): Promise<AccountStack[]>;
   getAccountStack(id: string): Promise<AccountStack | undefined>;
@@ -1950,6 +1982,76 @@ export class DatabaseStorage implements IStorage {
 
   async deleteBrokerConnection(id: string): Promise<void> {
     sqlite.prepare(`DELETE FROM broker_connections WHERE id = ?`).run(id);
+  }
+
+  // ── User API Keys ───────────────────────────────────────────────────────
+  private _mapUserApiKey(row: any): UserApiKey {
+    return {
+      id: row.id,
+      userId: row.user_id,
+      provider: row.provider,
+      apiKey: row.api_key,
+      endpointUrl: row.endpoint_url,
+      defaultModel: row.default_model,
+      isDefault: row.is_default,
+      isActive: row.is_active,
+      createdAt: row.created_at,
+    };
+  }
+
+  async getUserApiKeys(userId: number): Promise<UserApiKey[]> {
+    const rows = sqlite.prepare('SELECT * FROM user_api_keys WHERE user_id = ? ORDER BY created_at DESC').all(userId) as any[];
+    return rows.map(r => this._mapUserApiKey(r));
+  }
+
+  async getUserApiKey(id: string): Promise<UserApiKey | undefined> {
+    const row = sqlite.prepare('SELECT * FROM user_api_keys WHERE id = ?').get(id) as any;
+    if (!row) return undefined;
+    return this._mapUserApiKey(row);
+  }
+
+  async createUserApiKey(data: { userId: number; provider: string; apiKey?: string; endpointUrl?: string; defaultModel?: string; isDefault?: number }): Promise<UserApiKey> {
+    const id = `uak_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
+    // If setting as default, unset other defaults
+    if (data.isDefault) {
+      sqlite.prepare('UPDATE user_api_keys SET is_default = 0 WHERE user_id = ?').run(data.userId);
+    }
+    sqlite.prepare(`
+      INSERT INTO user_api_keys (id, user_id, provider, api_key, endpoint_url, default_model, is_default, is_active)
+      VALUES (?, ?, ?, ?, ?, ?, ?, 1)
+    `).run(id, data.userId, data.provider, data.apiKey ?? null, data.endpointUrl ?? null, data.defaultModel ?? null, data.isDefault ?? 0);
+    return this.getUserApiKey(id) as Promise<UserApiKey>;
+  }
+
+  async updateUserApiKey(id: string, data: Partial<Omit<UserApiKey, 'id' | 'userId' | 'createdAt'>>): Promise<UserApiKey | undefined> {
+    const existing = await this.getUserApiKey(id);
+    if (!existing) return undefined;
+    // If setting as default, unset other defaults
+    if (data.isDefault) {
+      sqlite.prepare('UPDATE user_api_keys SET is_default = 0 WHERE user_id = ?').run(existing.userId);
+    }
+    const fields: string[] = [];
+    const values: any[] = [];
+    if (data.provider !== undefined) { fields.push('provider = ?'); values.push(data.provider); }
+    if (data.apiKey !== undefined) { fields.push('api_key = ?'); values.push(data.apiKey); }
+    if (data.endpointUrl !== undefined) { fields.push('endpoint_url = ?'); values.push(data.endpointUrl); }
+    if (data.defaultModel !== undefined) { fields.push('default_model = ?'); values.push(data.defaultModel); }
+    if (data.isDefault !== undefined) { fields.push('is_default = ?'); values.push(data.isDefault); }
+    if (data.isActive !== undefined) { fields.push('is_active = ?'); values.push(data.isActive); }
+    if (fields.length === 0) return existing;
+    values.push(id);
+    sqlite.prepare(`UPDATE user_api_keys SET ${fields.join(', ')} WHERE id = ?`).run(...values);
+    return this.getUserApiKey(id);
+  }
+
+  async deleteUserApiKey(id: string): Promise<void> {
+    sqlite.prepare('DELETE FROM user_api_keys WHERE id = ?').run(id);
+  }
+
+  async getDefaultApiKey(userId: number): Promise<UserApiKey | undefined> {
+    const row = sqlite.prepare('SELECT * FROM user_api_keys WHERE user_id = ? AND is_default = 1 AND is_active = 1 LIMIT 1').get(userId) as any;
+    if (!row) return undefined;
+    return this._mapUserApiKey(row);
   }
 
   // ── Account Stacks ────────────────────────────────────────────────────────
