@@ -13,15 +13,13 @@ export function createMarketplaceRouter(): Router {
   // GET /api/marketplace/listings — browse with filters
   router.get("/listings", async (req: Request, res: Response) => {
     try {
-      const {
-        category,
-        search,
-        minRating,
-        priceType,
-        sortBy,
-        limit,
-        offset,
-      } = req.query as Record<string, string>;
+      const category = req.query.category as string | undefined;
+      const search = req.query.search as string | undefined;
+      const minRating = req.query.minRating as string | undefined;
+      const priceType = req.query.priceType as string | undefined;
+      const sortBy = req.query.sortBy as string | undefined;
+      const limit = req.query.limit as string | undefined;
+      const offset = req.query.offset as string | undefined;
 
       const listings = await storage.getListings({
         category: category || undefined,
@@ -59,7 +57,8 @@ export function createMarketplaceRouter(): Router {
   // GET /api/marketplace/listings/:id/reviews — paginated reviews
   router.get("/listings/:id/reviews", async (req: Request, res: Response) => {
     try {
-      const { limit, offset } = req.query as Record<string, string>;
+      const limit = req.query.limit as string | undefined;
+      const offset = req.query.offset as string | undefined;
       const listing = await storage.getListing(req.params.id);
       if (!listing) return res.status(404).json({ error: "Listing not found" });
       const reviews = await storage.getReviewsByListing(
@@ -77,7 +76,7 @@ export function createMarketplaceRouter(): Router {
   // GET /api/marketplace/featured
   router.get("/featured", async (req: Request, res: Response) => {
     try {
-      const { limit } = req.query as Record<string, string>;
+      const limit = req.query.limit as string | undefined;
       const listings = await storage.getFeaturedListings(limit ? parseInt(limit) : 10);
       res.json({ listings });
     } catch (err: any) {
@@ -89,7 +88,7 @@ export function createMarketplaceRouter(): Router {
   // GET /api/marketplace/trending
   router.get("/trending", async (req: Request, res: Response) => {
     try {
-      const { limit } = req.query as Record<string, string>;
+      const limit = req.query.limit as string | undefined;
       const listings = await storage.getTrendingListings(limit ? parseInt(limit) : 10);
       res.json({ listings });
     } catch (err: any) {

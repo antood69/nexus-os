@@ -7,21 +7,28 @@ import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 
-// ── Types ──────────────────────────────────────────────────────────────────
+// ── Types (matches shared/schema.ts MarketplaceListing) ───────────────────
 interface MarketplaceListing {
-  id: number;
+  id: string;
+  sellerId: number;
   title: string;
-  shortDescription: string;
-  category: string;
-  price: number;
-  priceType: "free" | "one_time" | "monthly";
-  rating: number;
-  reviewCount: number;
+  description: string;
+  shortDescription: string | null;
+  category: "workflow" | "agent" | "tool" | "prompt_pack" | "theme";
+  listingType: string;
+  priceUsd: number;
+  priceType: "one_time" | "monthly" | "free";
+  contentRef: string | null;
+  version: string;
+  isPublished: number;
+  isVerified: number;
   installCount: number;
-  sellerName: string;
-  previewImages: string[];
-  tags: string[];
-  isPublished: boolean;
+  ratingAvg: number;
+  ratingCount: number;
+  previewImages: string | null;
+  tags: string | null;
+  createdAt: string;
+  updatedAt: string;
 }
 
 interface CategoryCount {
@@ -72,26 +79,32 @@ function CategoryPlaceholder({ category }: { category: string }) {
   );
 }
 
+function parseJsonArray(val: string | null): string[] {
+  if (!val) return [];
+  try { return JSON.parse(val); } catch { return []; }
+}
+
 function ListingCard({ listing }: { listing: MarketplaceListing }) {
   const colors = categoryColors[listing.category] ?? { badge: "bg-muted text-muted-foreground border-border", placeholder: "from-muted/40 to-muted/20" };
   const label = categoryLabels[listing.category] ?? listing.category;
-  const priceLabel = listing.priceType === "free" || listing.price === 0
-    ? "Free"
+  const isFree = listing.priceType === "free" || listing.priceUsd === 0;
+  const priceLabel = isFree
+    ? "FREE"
     : listing.priceType === "monthly"
-    ? `$${listing.price}/mo`
-    : `$${listing.price}`;
-  const priceStyle = listing.priceType === "free" || listing.price === 0
+    ? `$${listing.priceUsd.toFixed(2)}/mo`
+    : `$${listing.priceUsd.toFixed(2)}`;
+  const priceStyle = isFree
     ? "bg-emerald-500/15 text-emerald-400 border-emerald-500/20"
     : "bg-blue-500/15 text-blue-400 border-blue-500/20";
+  const images = parseJsonArray(listing.previewImages);
 
   return (
     <Link href={`/marketplace/${listing.id}`}>
-      <div className="bg-card border border-border rounded-xl overflow-hidden bunz-card-hover cursor-pointer flex flex-col">
-        {/* Preview image */}
+      <div data-testid={`card-listing-${listing.id}`} className="bg-card border border-border rounded-xl overflow-hidden hover:border-primary/30 transition-colors cursor-pointer flex flex-col h-full">
         <div className="w-full h-40 overflow-hidden flex-shrink-0">
-          {listing.previewImages?.[0] ? (
+          {images[0] ? (
             <img
-              src={listing.previewImages[0]}
+              src={images[0]}
               alt={listing.title}
               className="w-full h-full object-cover"
               onError={(e) => { (e.currentTarget as HTMLImageElement).style.display = "none"; }}
@@ -101,7 +114,6 @@ function ListingCard({ listing }: { listing: MarketplaceListing }) {
           )}
         </div>
 
-        {/* Card body */}
         <div className="p-4 flex-1 flex flex-col gap-2">
           <div className="flex items-center gap-1.5 flex-wrap">
             <span className={`text-[10px] font-medium px-2 py-0.5 rounded-full border ${colors.badge}`}>
@@ -113,16 +125,19 @@ function ListingCard({ listing }: { listing: MarketplaceListing }) {
           </div>
 
           <h3 className="text-sm font-semibold leading-snug line-clamp-1">{listing.title}</h3>
-          <p className="text-xs text-muted-foreground line-clamp-2 flex-1">{listing.shortDescription}</p>
+          <p className="text-xs text-muted-foreground line-clamp-2 flex-1">{listing.shortDescription ?? ""}</p>
 
           <div className="mt-auto pt-2 border-t border-border/50 flex items-center justify-between gap-2">
-            <StarRating rating={listing.rating ?? 0} count={listing.reviewCount ?? 0} />
+            <StarRating rating={listing.ratingAvg ?? 0} count={listing.ratingCount ?? 0} />
             <div className="flex items-center gap-1 text-[11px] text-muted-foreground">
               <Download className="w-3 h-3" />
               {(listing.installCount ?? 0).toLocaleString()}
             </div>
           </div>
-          <p className="text-[11px] text-muted-foreground">by {listing.sellerName ?? "Unknown"}</p>
+
+          <Button variant="outline" size="sm" className="w-full text-xs mt-1" data-testid={`button-view-${listing.id}`}>
+            View
+          </Button>
         </div>
       </div>
     </Link>
@@ -151,28 +166,23 @@ export default function MarketplacePage() {
   const [priceFilter, setPriceFilter] = useState("all");
   const [debouncedSearch, setDebouncedSearch] = useState("");
 
-  // Debounce search
   const handleSearchChange = (value: string) => {
     setSearch(value);
-    clearTimeout((window as any)._searchTimer);
-    (window as any)._searchTimer = setTimeout(() => setDebouncedSearch(value), 350);
+    clearTimeout((window as any)._mktSearchTimer);
+    (window as any)._mktSearchTimer = setTimeout(() => setDebouncedSearch(value), 350);
   };
 
   const listingsQuery = useQuery<MarketplaceListing[]>({
-    queryKey: ["/api/marketplace/listings", { category, sort, price: priceFilter, search: debouncedSearch }],
+    queryKey: ["/api/marketplace/listings", category, sort, priceFilter, debouncedSearch],
     queryFn: async () => {
       const params = new URLSearchParams();
       if (category !== "all") params.set("category", category);
       if (sort) params.set("sortBy", sort);
-      if (priceFilter !== "all") {
-        const priceTypeMap: Record<string, string> = { free: "free", paid: "one_time" };
-        const mapped = priceTypeMap[priceFilter];
-        if (mapped) params.set("priceType", mapped);
-      }
+      if (priceFilter !== "all") params.set("priceType", priceFilter === "paid" ? "one_time" : priceFilter);
       if (debouncedSearch) params.set("search", debouncedSearch);
       const res = await apiRequest("GET", `/api/marketplace/listings?${params}`);
       const json = await res.json();
-      return json.listings ?? json;
+      return json.listings ?? [];
     },
   });
 
@@ -181,16 +191,17 @@ export default function MarketplacePage() {
     queryFn: async () => {
       const res = await apiRequest("GET", "/api/marketplace/categories");
       const json = await res.json();
-      return json.categories ?? json;
+      return json.categories ?? [];
     },
   });
 
-  const allCount = listingsQuery.data?.length ?? 0;
   const getCategoryCount = (cat: string) =>
     categoriesQuery.data?.find((c) => c.category === cat)?.count ?? 0;
 
+  const totalCount = categoriesQuery.data?.reduce((sum, c) => sum + c.count, 0) ?? 0;
+
   const tabs = [
-    { key: "all", label: "All", count: allCount },
+    { key: "all", label: "All", count: totalCount },
     { key: "workflow", label: "Workflows", count: getCategoryCount("workflow") },
     { key: "agent", label: "Agents", count: getCategoryCount("agent") },
     { key: "tool", label: "Tools", count: getCategoryCount("tool") },
@@ -206,7 +217,7 @@ export default function MarketplacePage() {
           <Store className="w-6 h-6 text-primary" />
         </div>
         <div>
-          <h1 className="text-2xl font-bold tracking-tight">Bunz Marketplace</h1>
+          <h1 className="text-2xl font-bold tracking-tight">Marketplace</h1>
           <p className="text-sm text-muted-foreground mt-1.5">
             Templates, agents, tools, and more — built by the community
           </p>
@@ -217,7 +228,7 @@ export default function MarketplacePage() {
             data-testid="input-marketplace-search"
             value={search}
             onChange={(e) => handleSearchChange(e.target.value)}
-            placeholder="Search listings…"
+            placeholder="Search listings..."
             className="pl-9 bg-background border-border"
           />
         </div>
@@ -225,7 +236,6 @@ export default function MarketplacePage() {
 
       {/* Filters row */}
       <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
-        {/* Category tabs */}
         <div className="flex items-center gap-1 flex-wrap">
           {tabs.map((tab) => (
             <button
@@ -248,16 +258,16 @@ export default function MarketplacePage() {
           ))}
         </div>
 
-        {/* Sort + Price dropdowns */}
         <div className="flex items-center gap-2 flex-shrink-0">
           <Select value={sort} onValueChange={setSort}>
-            <SelectTrigger data-testid="select-sort" className="bg-background border-border h-8 text-xs w-36">
+            <SelectTrigger data-testid="select-sort" className="bg-background border-border h-8 text-xs w-40">
               <SelectValue />
             </SelectTrigger>
             <SelectContent className="bg-card border-border">
               <SelectItem value="popular">Popular</SelectItem>
               <SelectItem value="newest">Newest</SelectItem>
-              <SelectItem value="top_rated">Top Rated</SelectItem>
+              <SelectItem value="price_low">Price Low-High</SelectItem>
+              <SelectItem value="price_high">Price High-Low</SelectItem>
             </SelectContent>
           </Select>
 
@@ -273,7 +283,7 @@ export default function MarketplacePage() {
           </Select>
 
           <Link href="/marketplace/my">
-            <Button variant="outline" size="sm" className="text-xs h-8 border-border">
+            <Button variant="outline" size="sm" className="text-xs h-8 border-border" data-testid="button-my-listings">
               My Listings
             </Button>
           </Link>
@@ -286,14 +296,13 @@ export default function MarketplacePage() {
           {[1, 2, 3, 4, 5, 6].map((i) => <SkeletonCard key={i} />)}
         </div>
       ) : listingsQuery.isError ? (
-        <div className="text-center py-20 text-sm text-muted-foreground">
+        <div data-testid="listings-error" className="text-center py-20 text-sm text-muted-foreground">
           Failed to load listings. Please try again.
         </div>
       ) : !listingsQuery.data?.length ? (
-        <div className="flex flex-col items-center justify-center py-20 text-center">
+        <div data-testid="listings-empty" className="flex flex-col items-center justify-center py-20 text-center">
           <Package className="w-12 h-12 text-muted-foreground mb-3" />
-          <p className="text-sm text-muted-foreground mb-1">No listings found</p>
-          <p className="text-xs text-muted-foreground">Try adjusting your filters or search query</p>
+          <p className="text-sm text-muted-foreground mb-1">No listings yet. Check back soon!</p>
         </div>
       ) : (
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">

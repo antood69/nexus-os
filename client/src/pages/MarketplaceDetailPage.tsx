@@ -1,16 +1,15 @@
 import { useState } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
-import { useParams, Link } from "wouter";
+import { useParams, Link, useLocation } from "wouter";
 import {
   ArrowLeft,
   Star,
   Download,
   Calendar,
   Package,
-  Edit2,
-  CheckCircle2,
   Tag,
   User,
+  LogIn,
 } from "lucide-react";
 import { queryClient, apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
@@ -18,35 +17,38 @@ import { useAuth } from "@/hooks/useAuth";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 
-// ── Types ──────────────────────────────────────────────────────────────────
+// ── Types (matches shared/schema.ts) ──────────────────────────────────────
 interface MarketplaceListing {
-  id: number;
-  title: string;
-  shortDescription: string;
-  description: string;
-  category: string;
-  price: number;
-  priceType: "free" | "one_time" | "monthly";
-  rating: number;
-  reviewCount: number;
-  installCount: number;
+  id: string;
   sellerId: number;
-  sellerName: string;
-  previewImages: string[];
-  tags: string[];
+  title: string;
+  description: string;
+  shortDescription: string | null;
+  category: "workflow" | "agent" | "tool" | "prompt_pack" | "theme";
+  listingType: string;
+  priceUsd: number;
+  priceType: "one_time" | "monthly" | "free";
+  contentRef: string | null;
   version: string;
-  isPublished: boolean;
+  isPublished: number;
+  isVerified: number;
+  installCount: number;
+  ratingAvg: number;
+  ratingCount: number;
+  previewImages: string | null;
+  tags: string | null;
   createdAt: string;
   updatedAt: string;
-  isInstalled?: boolean;
-  isPurchased?: boolean;
 }
 
-interface Review {
-  id: number;
-  reviewerName: string;
+interface MarketplaceReview {
+  id: string;
+  listingId: string;
+  buyerId: number;
+  purchaseId: string;
   rating: number;
-  comment: string;
+  reviewText: string | null;
+  isVerifiedPurchase: number;
   createdAt: string;
 }
 
@@ -66,6 +68,19 @@ const categoryLabels: Record<string, string> = {
   prompt_pack: "Prompt Pack",
   theme: "Theme",
 };
+
+function parseJsonArray(val: string | null): string[] {
+  if (!val) return [];
+  try { return JSON.parse(val); } catch { return []; }
+}
+
+function formatDate(dateStr: string) {
+  try {
+    return new Date(dateStr).toLocaleDateString("en-US", { year: "numeric", month: "short", day: "numeric" });
+  } catch {
+    return dateStr;
+  }
+}
 
 function StarRating({ rating, interactive = false, onRate }: { rating: number; interactive?: boolean; onRate?: (r: number) => void }) {
   const [hover, setHover] = useState(0);
@@ -88,21 +103,11 @@ function StarRating({ rating, interactive = false, onRate }: { rating: number; i
   );
 }
 
-function formatDate(dateStr: string) {
-  try {
-    return new Date(dateStr).toLocaleDateString("en-US", { year: "numeric", month: "short", day: "numeric" });
-  } catch {
-    return dateStr;
-  }
-}
-
-/** Minimal markdown-ish renderer: converts **bold**, `code`, and \n\n to paragraphs */
 function SimpleMarkdown({ text }: { text: string }) {
   const paragraphs = (text ?? "").split(/\n{2,}/);
   return (
     <div className="space-y-3 text-sm text-foreground/90 leading-relaxed">
       {paragraphs.map((para, i) => {
-        // Bold
         const parts = para.split(/(\*\*[^*]+\*\*|`[^`]+`)/g).map((part, j) => {
           if (part.startsWith("**") && part.endsWith("**")) {
             return <strong key={j}>{part.slice(2, -2)}</strong>;
@@ -139,14 +144,15 @@ function SkeletonDetail() {
 export default function MarketplaceDetailPage() {
   const { id } = useParams<{ id: string }>();
   const { toast } = useToast();
-  const { user } = useAuth();
+  const { user, isAuthenticated } = useAuth();
+  const [, navigate] = useLocation();
 
   const [reviewText, setReviewText] = useState("");
   const [reviewRating, setReviewRating] = useState(5);
   const [showReviewForm, setShowReviewForm] = useState(false);
 
-  const listingQuery = useQuery<MarketplaceListing>({
-    queryKey: [`/api/marketplace/listings/${id}`],
+  const listingQuery = useQuery<{ listing: MarketplaceListing; reviews: MarketplaceReview[] }>({
+    queryKey: ["/api/marketplace/listings", id],
     queryFn: async () => {
       const res = await apiRequest("GET", `/api/marketplace/listings/${id}`);
       return res.json();
@@ -154,8 +160,8 @@ export default function MarketplaceDetailPage() {
     enabled: !!id,
   });
 
-  const reviewsQuery = useQuery<Review[]>({
-    queryKey: [`/api/marketplace/listings/${id}/reviews`],
+  const reviewsQuery = useQuery<{ reviews: MarketplaceReview[] }>({
+    queryKey: ["/api/marketplace/listings", id, "reviews"],
     queryFn: async () => {
       const res = await apiRequest("GET", `/api/marketplace/listings/${id}/reviews`);
       return res.json();
@@ -169,7 +175,7 @@ export default function MarketplaceDetailPage() {
       return res.json();
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: [`/api/marketplace/listings/${id}`] });
+      queryClient.invalidateQueries({ queryKey: ["/api/marketplace/listings", id] });
       toast({ title: "Installed successfully" });
     },
     onError: () => toast({ title: "Install failed", variant: "destructive" }),
@@ -183,7 +189,7 @@ export default function MarketplaceDetailPage() {
     onSuccess: (data: any) => {
       if (data?.url) window.location.href = data.url;
       else {
-        queryClient.invalidateQueries({ queryKey: [`/api/marketplace/listings/${id}`] });
+        queryClient.invalidateQueries({ queryKey: ["/api/marketplace/listings", id] });
         toast({ title: "Purchase successful" });
       }
     },
@@ -194,13 +200,13 @@ export default function MarketplaceDetailPage() {
     mutationFn: async () => {
       const res = await apiRequest("POST", `/api/marketplace/listings/${id}/reviews`, {
         rating: reviewRating,
-        comment: reviewText,
+        reviewText,
       });
       return res.json();
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: [`/api/marketplace/listings/${id}/reviews`] });
-      queryClient.invalidateQueries({ queryKey: [`/api/marketplace/listings/${id}`] });
+      queryClient.invalidateQueries({ queryKey: ["/api/marketplace/listings", id, "reviews"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/marketplace/listings", id] });
       setReviewText("");
       setReviewRating(5);
       setShowReviewForm(false);
@@ -210,11 +216,11 @@ export default function MarketplaceDetailPage() {
   });
 
   if (listingQuery.isLoading) return <SkeletonDetail />;
-  if (listingQuery.isError || !listingQuery.data) {
+  if (listingQuery.isError || !listingQuery.data?.listing) {
     return (
       <div className="p-6">
         <Link href="/marketplace">
-          <button className="flex items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground mb-4">
+          <button data-testid="button-back" className="flex items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground mb-4">
             <ArrowLeft className="w-4 h-4" /> Back to Marketplace
           </button>
         </Link>
@@ -223,18 +229,20 @@ export default function MarketplaceDetailPage() {
     );
   }
 
-  const listing = listingQuery.data;
+  const listing = listingQuery.data.listing;
+  const reviews = reviewsQuery.data?.reviews ?? listingQuery.data.reviews ?? [];
   const catColors = categoryColors[listing.category] ?? "bg-muted text-muted-foreground border-border";
   const catLabel = categoryLabels[listing.category] ?? listing.category;
-  const isFree = listing.priceType === "free" || listing.price === 0;
-  const priceLabel = isFree ? "Free" : listing.priceType === "monthly" ? `$${listing.price}/mo` : `$${listing.price}`;
-  const isOwner = user && listing.sellerId && (user as any).id === listing.sellerId;
+  const isFree = listing.priceType === "free" || listing.priceUsd === 0;
+  const priceLabel = isFree ? "Free" : listing.priceType === "monthly" ? `$${listing.priceUsd.toFixed(2)}/mo` : `$${listing.priceUsd.toFixed(2)}`;
+  const images = parseJsonArray(listing.previewImages);
+  const tagsList = parseJsonArray(listing.tags);
 
   return (
     <div className="p-6 max-w-[1200px] space-y-6">
       {/* Back nav */}
       <Link href="/marketplace">
-        <button className="flex items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground transition-colors">
+        <button data-testid="button-back" className="flex items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground transition-colors">
           <ArrowLeft className="w-4 h-4" />
           Back to Marketplace
         </button>
@@ -244,7 +252,6 @@ export default function MarketplaceDetailPage() {
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         {/* Left: content */}
         <div className="lg:col-span-2 space-y-5">
-          {/* Header */}
           <div className="space-y-2">
             <div className="flex items-center gap-2 flex-wrap">
               <span className={`text-[10px] font-medium px-2 py-0.5 rounded-full border ${catColors}`}>{catLabel}</span>
@@ -253,18 +260,24 @@ export default function MarketplaceDetailPage() {
               )}
             </div>
             <h1 className="text-2xl font-bold tracking-tight">{listing.title}</h1>
-            <p className="text-sm text-muted-foreground">{listing.shortDescription}</p>
+            {listing.shortDescription && (
+              <p className="text-sm text-muted-foreground">{listing.shortDescription}</p>
+            )}
           </div>
 
-          {/* Preview image */}
-          {listing.previewImages?.[0] && (
-            <div className="rounded-xl overflow-hidden border border-border">
-              <img
-                src={listing.previewImages[0]}
-                alt={listing.title}
-                className="w-full object-cover max-h-80"
-                onError={(e) => { (e.currentTarget as HTMLImageElement).parentElement!.style.display = "none"; }}
-              />
+          {/* Preview images */}
+          {images.length > 0 && (
+            <div className="space-y-2">
+              {images.map((img, i) => (
+                <div key={i} className="rounded-xl overflow-hidden border border-border">
+                  <img
+                    src={img}
+                    alt={`${listing.title} preview ${i + 1}`}
+                    className="w-full object-cover max-h-80"
+                    onError={(e) => { (e.currentTarget as HTMLImageElement).parentElement!.style.display = "none"; }}
+                  />
+                </div>
+              ))}
             </div>
           )}
 
@@ -275,10 +288,10 @@ export default function MarketplaceDetailPage() {
           </div>
 
           {/* Tags */}
-          {listing.tags?.length > 0 && (
+          {tagsList.length > 0 && (
             <div className="flex items-center gap-1.5 flex-wrap">
               <Tag className="w-3.5 h-3.5 text-muted-foreground" />
-              {listing.tags.map((tag) => (
+              {tagsList.map((tag) => (
                 <span key={tag} className="text-[11px] px-2 py-0.5 rounded-full bg-muted text-muted-foreground">
                   {tag}
                 </span>
@@ -290,7 +303,6 @@ export default function MarketplaceDetailPage() {
         {/* Right: price/action card */}
         <div className="space-y-4">
           <div className="bg-card border border-border rounded-xl p-5 space-y-4 sticky top-4">
-            {/* Price */}
             <div className="text-center">
               <span className="text-3xl font-bold">{priceLabel}</span>
               {listing.priceType === "monthly" && (
@@ -299,18 +311,16 @@ export default function MarketplaceDetailPage() {
             </div>
 
             {/* CTA */}
-            {isOwner ? (
-              <Link href={`/marketplace/my`}>
-                <Button variant="outline" className="w-full gap-2">
-                  <Edit2 className="w-4 h-4" />
-                  Edit Listing
-                </Button>
-              </Link>
-            ) : listing.isInstalled || listing.isPurchased ? (
-              <div className="flex items-center justify-center gap-2 py-2 text-sm text-emerald-400 font-medium">
-                <CheckCircle2 className="w-4 h-4" />
-                Installed
-              </div>
+            {!isAuthenticated ? (
+              <Button
+                className="w-full gap-2"
+                variant="outline"
+                onClick={() => navigate("/login")}
+                data-testid="button-login-to-install"
+              >
+                <LogIn className="w-4 h-4" />
+                Login to install
+              </Button>
             ) : isFree ? (
               <Button
                 className="w-full gap-2"
@@ -319,7 +329,7 @@ export default function MarketplaceDetailPage() {
                 data-testid="button-install"
               >
                 <Download className="w-4 h-4" />
-                {installMutation.isPending ? "Installing…" : "Install Free"}
+                {installMutation.isPending ? "Installing..." : "Install Free"}
               </Button>
             ) : (
               <Button
@@ -328,7 +338,7 @@ export default function MarketplaceDetailPage() {
                 disabled={purchaseMutation.isPending}
                 data-testid="button-purchase"
               >
-                {purchaseMutation.isPending ? "Redirecting…" : `Purchase — ${priceLabel}`}
+                {purchaseMutation.isPending ? "Redirecting..." : `Purchase — ${priceLabel}`}
               </Button>
             )}
 
@@ -337,20 +347,13 @@ export default function MarketplaceDetailPage() {
               <div className="flex items-center justify-between text-xs">
                 <span className="text-muted-foreground">Rating</span>
                 <div className="flex items-center gap-1.5">
-                  <StarRating rating={listing.rating ?? 0} />
-                  <span className="text-muted-foreground">({listing.reviewCount ?? 0})</span>
+                  <StarRating rating={listing.ratingAvg ?? 0} />
+                  <span className="text-muted-foreground">({listing.ratingCount ?? 0})</span>
                 </div>
               </div>
               <div className="flex items-center justify-between text-xs">
                 <span className="text-muted-foreground">Installs</span>
                 <span className="font-medium">{(listing.installCount ?? 0).toLocaleString()}</span>
-              </div>
-              <div className="flex items-center justify-between text-xs">
-                <span className="text-muted-foreground">Seller</span>
-                <div className="flex items-center gap-1">
-                  <User className="w-3 h-3 text-muted-foreground" />
-                  <span className="font-medium">{listing.sellerName ?? "Unknown"}</span>
-                </div>
               </div>
               {listing.createdAt && (
                 <div className="flex items-center justify-between text-xs">
@@ -377,12 +380,12 @@ export default function MarketplaceDetailPage() {
         <div className="flex items-center justify-between">
           <h2 className="text-base font-semibold">
             Reviews
-            {reviewsQuery.data?.length ? (
-              <span className="ml-2 text-xs font-normal text-muted-foreground">({reviewsQuery.data.length})</span>
-            ) : null}
+            {reviews.length > 0 && (
+              <span className="ml-2 text-xs font-normal text-muted-foreground">({reviews.length})</span>
+            )}
           </h2>
-          {!showReviewForm && (
-            <Button variant="outline" size="sm" className="text-xs" onClick={() => setShowReviewForm(true)}>
+          {isAuthenticated && !showReviewForm && (
+            <Button variant="outline" size="sm" className="text-xs" onClick={() => setShowReviewForm(true)} data-testid="button-write-review">
               Write a Review
             </Button>
           )}
@@ -399,9 +402,10 @@ export default function MarketplaceDetailPage() {
             <div className="space-y-1">
               <label className="text-xs text-muted-foreground">Comment</label>
               <Textarea
+                data-testid="input-review-text"
                 value={reviewText}
                 onChange={(e) => setReviewText(e.target.value)}
-                placeholder="Share your experience…"
+                placeholder="Share your experience..."
                 className="bg-background border-border min-h-[80px] text-sm"
               />
             </div>
@@ -410,8 +414,9 @@ export default function MarketplaceDetailPage() {
                 size="sm"
                 onClick={() => reviewMutation.mutate()}
                 disabled={!reviewText.trim() || reviewMutation.isPending}
+                data-testid="button-submit-review"
               >
-                {reviewMutation.isPending ? "Submitting…" : "Submit Review"}
+                {reviewMutation.isPending ? "Submitting..." : "Submit Review"}
               </Button>
               <Button
                 size="sm"
@@ -435,28 +440,31 @@ export default function MarketplaceDetailPage() {
               </div>
             ))}
           </div>
-        ) : !reviewsQuery.data?.length ? (
-          <div className="text-center py-10 text-sm text-muted-foreground">
+        ) : reviews.length === 0 ? (
+          <div data-testid="reviews-empty" className="text-center py-10 text-sm text-muted-foreground">
             No reviews yet. Be the first to review this listing.
           </div>
         ) : (
           <div className="space-y-3">
-            {reviewsQuery.data.map((review) => (
-              <div key={review.id} className="bg-card border border-border rounded-xl p-4 space-y-2">
+            {reviews.map((review) => (
+              <div key={review.id} data-testid={`card-review-${review.id}`} className="bg-card border border-border rounded-xl p-4 space-y-2">
                 <div className="flex items-center justify-between">
                   <div className="flex items-center gap-2">
-                    <div className="w-7 h-7 rounded-full bg-primary/15 flex items-center justify-center text-xs font-semibold text-primary">
-                      {(review.reviewerName ?? "?")[0].toUpperCase()}
+                    <div className="w-7 h-7 rounded-full bg-primary/15 flex items-center justify-center">
+                      <User className="w-3.5 h-3.5 text-primary" />
                     </div>
-                    <span className="text-sm font-medium">{review.reviewerName ?? "Anonymous"}</span>
+                    <span className="text-sm font-medium">Buyer #{review.buyerId}</span>
+                    {review.isVerifiedPurchase === 1 && (
+                      <span className="text-[10px] text-emerald-400">Verified</span>
+                    )}
                   </div>
                   <div className="flex items-center gap-2">
                     <StarRating rating={review.rating} />
                     <span className="text-[11px] text-muted-foreground">{formatDate(review.createdAt)}</span>
                   </div>
                 </div>
-                {review.comment && (
-                  <p className="text-sm text-muted-foreground leading-relaxed pl-9">{review.comment}</p>
+                {review.reviewText && (
+                  <p className="text-sm text-muted-foreground leading-relaxed pl-9">{review.reviewText}</p>
                 )}
               </div>
             ))}
