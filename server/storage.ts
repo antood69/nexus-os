@@ -19,6 +19,41 @@ import { eq, desc, gte } from "drizzle-orm";
 const sqlite = new Database("data.db");
 sqlite.pragma("journal_mode = WAL");
 
+// Auto-create new Phase 2 tables if they don't exist
+sqlite.exec(`
+  CREATE TABLE IF NOT EXISTS token_usage (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    user_id INTEGER NOT NULL,
+    model TEXT NOT NULL,
+    input_tokens INTEGER NOT NULL DEFAULT 0,
+    output_tokens INTEGER NOT NULL DEFAULT 0,
+    total_tokens INTEGER NOT NULL DEFAULT 0,
+    endpoint TEXT,
+    created_at TEXT NOT NULL DEFAULT ''
+  );
+  CREATE TABLE IF NOT EXISTS token_packs (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    user_id INTEGER NOT NULL,
+    tokens INTEGER NOT NULL,
+    price INTEGER NOT NULL,
+    stripe_payment_id TEXT,
+    status TEXT NOT NULL DEFAULT 'active',
+    tokens_remaining INTEGER NOT NULL,
+    purchased_at TEXT NOT NULL DEFAULT '',
+    created_at TEXT NOT NULL DEFAULT ''
+  );
+  CREATE TABLE IF NOT EXISTS user_plans (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    user_id INTEGER NOT NULL,
+    tier TEXT NOT NULL DEFAULT 'free',
+    monthly_tokens INTEGER NOT NULL DEFAULT 50000,
+    tokens_used INTEGER NOT NULL DEFAULT 0,
+    period_start TEXT NOT NULL DEFAULT '',
+    period_end TEXT NOT NULL DEFAULT '',
+    created_at TEXT NOT NULL DEFAULT ''
+  );
+`);
+
 export const db = drizzle(sqlite);
 
 export interface IStorage {
