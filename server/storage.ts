@@ -13,6 +13,9 @@ import {
   type UserPlan, type InsertUserPlan, userPlans,
   type WorkflowRun, type InsertWorkflowRun, workflowRuns,
   type AgentExecution, type InsertAgentExecution, agentExecutions,
+  type WorkflowVersion, type InsertWorkflowVersion, workflowVersions,
+  type Session, sessions,
+  type OwnerIntelligence, ownerIntelligence,
 } from "@shared/schema";
 import { drizzle } from "drizzle-orm/better-sqlite3";
 import Database from "better-sqlite3";
@@ -26,10 +29,38 @@ sqlite.exec(`
   CREATE TABLE IF NOT EXISTS users (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     username TEXT NOT NULL UNIQUE,
-    password TEXT NOT NULL,
+    email TEXT NOT NULL UNIQUE,
+    password_hash TEXT,
+    display_name TEXT,
+    avatar_url TEXT,
+    auth_provider TEXT NOT NULL DEFAULT 'email',
+    provider_id TEXT,
+    role TEXT NOT NULL DEFAULT 'user',
     tier TEXT NOT NULL DEFAULT 'free',
     stripe_customer_id TEXT,
-    subscription_id TEXT
+    subscription_id TEXT,
+    last_login_at TEXT,
+    created_at TEXT NOT NULL DEFAULT ''
+  );
+  CREATE TABLE IF NOT EXISTS sessions (
+    id TEXT PRIMARY KEY,
+    user_id INTEGER NOT NULL,
+    expires_at TEXT NOT NULL,
+    created_at TEXT NOT NULL DEFAULT ''
+  );
+  CREATE TABLE IF NOT EXISTS owner_intelligence (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    user_id INTEGER NOT NULL,
+    user_email TEXT,
+    event_type TEXT NOT NULL,
+    model TEXT,
+    input_data TEXT,
+    output_data TEXT,
+    tokens_used INTEGER DEFAULT 0,
+    quality TEXT,
+    tags TEXT,
+    metadata TEXT,
+    created_at TEXT NOT NULL DEFAULT ''
   );
   CREATE TABLE IF NOT EXISTS workflows (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -37,6 +68,21 @@ sqlite.exec(`
     description TEXT,
     status TEXT NOT NULL DEFAULT 'draft',
     priority TEXT NOT NULL DEFAULT 'medium',
+    canvas_state TEXT,
+    is_template INTEGER DEFAULT 0,
+    template_category TEXT,
+    template_description TEXT,
+    is_public INTEGER DEFAULT 0,
+    fork_count INTEGER DEFAULT 0,
+    use_count INTEGER DEFAULT 0,
+    created_at TEXT NOT NULL DEFAULT ''
+  );
+  CREATE TABLE IF NOT EXISTS workflow_versions (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    workflow_id INTEGER NOT NULL,
+    version_number INTEGER NOT NULL,
+    graph_state TEXT NOT NULL,
+    label TEXT,
     created_at TEXT NOT NULL DEFAULT ''
   );
   CREATE TABLE IF NOT EXISTS agents (
@@ -182,6 +228,29 @@ sqlite.exec(`
   );
 `);
 
+// Safe ALTER TABLE for existing DBs that lack new columns
+const safeAlter = (sql: string) => {
+  try { sqlite.exec(sql); } catch (_) { /* column already exists */ }
+};
+// Users table migration for existing DBs
+safeAlter("ALTER TABLE users ADD COLUMN email TEXT NOT NULL DEFAULT ''");
+safeAlter("ALTER TABLE users ADD COLUMN password_hash TEXT");
+safeAlter("ALTER TABLE users ADD COLUMN display_name TEXT");
+safeAlter("ALTER TABLE users ADD COLUMN avatar_url TEXT");
+safeAlter("ALTER TABLE users ADD COLUMN auth_provider TEXT NOT NULL DEFAULT 'email'");
+safeAlter("ALTER TABLE users ADD COLUMN provider_id TEXT");
+safeAlter("ALTER TABLE users ADD COLUMN role TEXT NOT NULL DEFAULT 'user'");
+safeAlter("ALTER TABLE users ADD COLUMN last_login_at TEXT");
+safeAlter("ALTER TABLE users ADD COLUMN created_at TEXT NOT NULL DEFAULT ''");
+// Workflows table migration
+safeAlter("ALTER TABLE workflows ADD COLUMN canvas_state TEXT");
+safeAlter("ALTER TABLE workflows ADD COLUMN is_template INTEGER DEFAULT 0");
+safeAlter("ALTER TABLE workflows ADD COLUMN template_category TEXT");
+safeAlter("ALTER TABLE workflows ADD COLUMN template_description TEXT");
+safeAlter("ALTER TABLE workflows ADD COLUMN is_public INTEGER DEFAULT 0");
+safeAlter("ALTER TABLE workflows ADD COLUMN fork_count INTEGER DEFAULT 0");
+safeAlter("ALTER TABLE workflows ADD COLUMN use_count INTEGER DEFAULT 0");
+
 export const db = drizzle(sqlite);
 
 export interface IStorage {
@@ -239,7 +308,7 @@ export interface IStorage {
   getUserPlan(userId: number): Promise<UserPlan | undefined>;
   createUserPlan(plan: InsertUserPlan): Promise<UserPlan>;
   updateUserPlan(id: number, data: Partial<InsertUserPlan>): Promise<UserPlan | undefined>;
-  updateUser(id: number, data: Partial<{ tier: string; stripeCustomerId: string; subscriptionId: string }>): Promise<User | undefined>;
+  updateUser(id: number, data: Partial<{ tier: string; stripeCustomerId: string; subscriptionId: string; role: string; avatarUrl: string; displayName: string; lastLoginAt: string; passwordHash: string; authProvider: string; providerId: string }>): Promise<User | undefined>;
   // Workflow Runs
   getWorkflowRuns(workflowId: number): Promise<WorkflowRun[]>;
   getWorkflowRun(id: number): Promise<WorkflowRun | undefined>;
@@ -249,6 +318,26 @@ export interface IStorage {
   getAgentExecutions(runId: number): Promise<AgentExecution[]>;
   createAgentExecution(exec: InsertAgentExecution): Promise<AgentExecution>;
   updateAgentExecution(id: number, data: Partial<InsertAgentExecution>): Promise<AgentExecution | undefined>;
+  // Workflow Versions
+  getWorkflowVersions(workflowId: number): Promise<WorkflowVersion[]>;
+  createWorkflowVersion(v: InsertWorkflowVersion): Promise<WorkflowVersion>;
+  getWorkflowVersion(id: number): Promise<WorkflowVersion | undefined>;
+  // Templates
+  getPublicTemplates(): Promise<Workflow[]>;
+  // Auth: Sessions
+  createSession(session: { id: string; userId: number; expiresAt: string }): Promise<Session>;
+  getSession(id: string): Promise<Session | undefined>;
+  deleteSession(id: string): Promise<void>;
+  deleteExpiredSessions(): Promise<void>;
+  // Auth: Users (extended)
+  getUserByEmail(email: string): Promise<User | undefined>;
+  getUserByProviderId(provider: string, providerId: string): Promise<User | undefined>;
+  getAllUsers(): Promise<User[]>;
+  // Owner Intelligence
+  recordIntelligence(data: { userId: number; userEmail?: string; eventType: string; model?: string; inputData?: string; outputData?: string; tokensUsed?: number; quality?: string; tags?: string; metadata?: string }): Promise<OwnerIntelligence>;
+  getIntelligence(opts: { limit?: number; offset?: number; eventType?: string; userId?: number; quality?: string }): Promise<OwnerIntelligence[]>;
+  getIntelligenceCount(): Promise<number>;
+  updateIntelligenceQuality(id: number, quality: string): Promise<void>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -413,7 +502,7 @@ export class DatabaseStorage implements IStorage {
   }
 
   // Update User
-  async updateUser(id: number, data: Partial<{ tier: string; stripeCustomerId: string; subscriptionId: string }>): Promise<User | undefined> {
+  async updateUser(id: number, data: Partial<{ tier: string; stripeCustomerId: string; subscriptionId: string; role: string; avatarUrl: string; displayName: string; lastLoginAt: string; passwordHash: string; authProvider: string; providerId: string }>): Promise<User | undefined> {
     return db.update(users).set(data).where(eq(users.id, id)).returning().get();
   }
 
@@ -440,6 +529,72 @@ export class DatabaseStorage implements IStorage {
   }
   async updateAgentExecution(id: number, data: Partial<InsertAgentExecution>) {
     return db.update(agentExecutions).set(data).where(eq(agentExecutions.id, id)).returning().get();
+  }
+
+  // Workflow Versions
+  async getWorkflowVersions(workflowId: number) {
+    return db.select().from(workflowVersions).where(eq(workflowVersions.workflowId, workflowId)).orderBy(desc(workflowVersions.versionNumber)).all();
+  }
+  async createWorkflowVersion(v: InsertWorkflowVersion) {
+    return db.insert(workflowVersions).values({ ...v, createdAt: new Date().toISOString() }).returning().get();
+  }
+  async getWorkflowVersion(id: number) {
+    return db.select().from(workflowVersions).where(eq(workflowVersions.id, id)).get();
+  }
+
+  // Templates
+  async getPublicTemplates() {
+    return db.select().from(workflows).where(eq(workflows.isPublic, 1)).all();
+  }
+
+  // Auth: Sessions
+  async createSession(session: { id: string; userId: number; expiresAt: string }) {
+    return db.insert(sessions).values({ ...session, createdAt: new Date().toISOString() }).returning().get();
+  }
+  async getSession(id: string) {
+    return db.select().from(sessions).where(eq(sessions.id, id)).get();
+  }
+  async deleteSession(id: string) {
+    db.delete(sessions).where(eq(sessions.id, id)).run();
+  }
+  async deleteExpiredSessions() {
+    const now = new Date().toISOString();
+    sqlite.exec(`DELETE FROM sessions WHERE expires_at < '${now}'`);
+  }
+
+  // Auth: Users (extended)
+  async getUserByEmail(email: string) {
+    return db.select().from(users).where(eq(users.email, email)).get();
+  }
+  async getUserByProviderId(provider: string, providerId: string) {
+    return db.select().from(users).where(eq(users.providerId, providerId)).get();
+  }
+  async getAllUsers() {
+    return db.select().from(users).orderBy(desc(users.id)).all();
+  }
+
+  // Owner Intelligence
+  async recordIntelligence(data: { userId: number; userEmail?: string; eventType: string; model?: string; inputData?: string; outputData?: string; tokensUsed?: number; quality?: string; tags?: string; metadata?: string }) {
+    return db.insert(ownerIntelligence).values({ ...data, createdAt: new Date().toISOString() } as any).returning().get();
+  }
+  async getIntelligence(opts: { limit?: number; offset?: number; eventType?: string; userId?: number; quality?: string }) {
+    // Use raw SQL for flexible filtering
+    const conditions: string[] = [];
+    if (opts.eventType) conditions.push(`event_type = '${opts.eventType}'`);
+    if (opts.userId) conditions.push(`user_id = ${opts.userId}`);
+    if (opts.quality) conditions.push(`quality = '${opts.quality}'`);
+    const where = conditions.length > 0 ? `WHERE ${conditions.join(' AND ')}` : '';
+    const limit = opts.limit || 50;
+    const offset = opts.offset || 0;
+    const rows = sqlite.prepare(`SELECT * FROM owner_intelligence ${where} ORDER BY id DESC LIMIT ? OFFSET ?`).all(limit, offset);
+    return rows as OwnerIntelligence[];
+  }
+  async getIntelligenceCount() {
+    const row = sqlite.prepare('SELECT COUNT(*) as count FROM owner_intelligence').get() as any;
+    return row?.count || 0;
+  }
+  async updateIntelligenceQuality(id: number, quality: string) {
+    sqlite.prepare('UPDATE owner_intelligence SET quality = ? WHERE id = ?').run(quality, id);
   }
 }
 

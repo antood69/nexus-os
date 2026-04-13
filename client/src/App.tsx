@@ -16,31 +16,39 @@ import TradingJournalPage from "@/pages/TradingJournalPage";
 import BotChallengePage from "@/pages/BotChallengePage";
 import SettingsPage from "@/pages/SettingsPage";
 import TokenUsagePage from "@/pages/TokenUsagePage";
+import LoginPage from "@/pages/LoginPage";
+import AdminPage from "@/pages/AdminPage";
 import AppLayout from "@/components/AppLayout";
 import JarvisWidget from "@/components/JarvisWidget";
 import { ThemeProvider } from "./contexts/ThemeContext";
 
 function AppRouter() {
   return (
-    <>
-      <AppLayout>
-        <Switch>
-          <Route path="/" component={Dashboard} />
-          <Route path="/workflows" component={WorkflowsPage} />
-          <Route path="/workflows/:id" component={WorkflowDetailPage} />
-          <Route path="/agents" component={AgentsPage} />
-          <Route path="/agents/:id/chat" component={AgentChatPage} />
-          <Route path="/audit" component={AuditPage} />
-          <Route path="/pricing" component={PricingPage} />
-          <Route path="/journal" component={TradingJournalPage} />
-          <Route path="/bot-challenge" component={BotChallengePage} />
-          <Route path="/settings" component={SettingsPage} />
-          <Route path="/usage" component={TokenUsagePage} />
-          <Route component={NotFound} />
-        </Switch>
-      </AppLayout>
-      <JarvisWidget />
-    </>
+    <Switch>
+      {/* Public routes — no AppLayout */}
+      <Route path="/login" component={LoginPage} />
+
+      {/* Protected routes — wrapped in AppLayout */}
+      <Route>
+        <AppLayout>
+          <Switch>
+            <Route path="/" component={Dashboard} />
+            <Route path="/workflows" component={WorkflowsPage} />
+            <Route path="/workflows/:id" component={WorkflowDetailPage} />
+            <Route path="/agents" component={AgentsPage} />
+            <Route path="/agents/:id/chat" component={AgentChatPage} />
+            <Route path="/audit" component={AuditPage} />
+            <Route path="/pricing" component={PricingPage} />
+            <Route path="/journal" component={TradingJournalPage} />
+            <Route path="/bot-challenge" component={BotChallengePage} />
+            <Route path="/settings" component={SettingsPage} />
+            <Route path="/usage" component={TokenUsagePage} />
+            <Route path="/admin" component={AdminPage} />
+            <Route component={NotFound} />
+          </Switch>
+        </AppLayout>
+      </Route>
+    </Switch>
   );
 }
 
@@ -52,6 +60,7 @@ function App() {
           <Toaster />
           <Router hook={useHashLocation}>
             <AppRouter />
+            <JarvisWidget />
           </Router>
         </TooltipProvider>
       </QueryClientProvider>

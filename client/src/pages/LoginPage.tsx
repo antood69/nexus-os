@@ -1,292 +1,376 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useLocation } from "wouter";
-import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Alert, AlertDescription } from "@/components/ui/alert";
-import { AlertCircle } from "lucide-react";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Github } from "lucide-react";
 
-// ---------------------------------------------------------------------------
-// NEXUS Logo SVG (matches AppLayout)
-// ---------------------------------------------------------------------------
-function NexusLogo({ size = 48 }: { size?: number }) {
+function GoogleIcon() {
   return (
     <svg
-      width={size}
-      height={size}
-      viewBox="0 0 40 40"
-      fill="none"
+      width="18"
+      height="18"
+      viewBox="0 0 18 18"
       xmlns="http://www.w3.org/2000/svg"
-      aria-label="NEXUS OS logo"
+      aria-hidden="true"
     >
-      <rect width="40" height="40" rx="8" fill="url(#nexus-grad)" />
-      {/* N-shape path */}
       <path
-        d="M10 30V10L20 26V10M20 26V10L30 30V10"
-        stroke="white"
-        strokeWidth="2.8"
-        strokeLinecap="round"
-        strokeLinejoin="round"
+        d="M17.64 9.205c0-.639-.057-1.252-.164-1.841H9v3.481h4.844a4.14 4.14 0 0 1-1.796 2.716v2.259h2.908c1.702-1.567 2.684-3.875 2.684-6.615Z"
+        fill="#4285F4"
       />
-      <defs>
-        <linearGradient
-          id="nexus-grad"
-          x1="0"
-          y1="0"
-          x2="40"
-          y2="40"
-          gradientUnits="userSpaceOnUse"
-        >
-          <stop stopColor="#6366f1" />
-          <stop offset="1" stopColor="#7c3aed" />
-        </linearGradient>
-      </defs>
+      <path
+        d="M9 18c2.43 0 4.467-.806 5.956-2.18l-2.908-2.259c-.806.54-1.837.86-3.048.86-2.344 0-4.328-1.584-5.036-3.711H.957v2.332A8.997 8.997 0 0 0 9 18Z"
+        fill="#34A853"
+      />
+      <path
+        d="M3.964 10.71A5.41 5.41 0 0 1 3.682 9c0-.593.102-1.17.282-1.71V4.958H.957A8.996 8.996 0 0 0 0 9c0 1.452.348 2.827.957 4.042l3.007-2.332Z"
+        fill="#FBBC05"
+      />
+      <path
+        d="M9 3.58c1.321 0 2.508.454 3.44 1.345l2.582-2.58C13.463.891 11.426 0 9 0A8.997 8.997 0 0 0 .957 4.958L3.964 6.29C4.672 4.163 6.656 3.58 9 3.58Z"
+        fill="#EA4335"
+      />
     </svg>
   );
 }
 
-// ---------------------------------------------------------------------------
-// Types
-// ---------------------------------------------------------------------------
-type Mode = "signin" | "register";
-
-// ---------------------------------------------------------------------------
-// LoginPage
-// ---------------------------------------------------------------------------
-export default function LoginPage() {
-  const [, setLocation] = useLocation();
-  const [mode, setMode] = useState<Mode>("signin");
-
-  // Form state
-  const [username, setUsername] = useState("");
-  const [password, setPassword] = useState("");
-  const [confirmPassword, setConfirmPassword] = useState("");
-
-  // UI state
-  const [error, setError] = useState<string | null>(null);
-  const [loading, setLoading] = useState(false);
-
-  // Switch modes, clearing errors and fields
-  function switchMode(next: Mode) {
-    setMode(next);
-    setError(null);
-    setUsername("");
-    setPassword("");
-    setConfirmPassword("");
-  }
-
-  async function handleSubmit(e: React.FormEvent) {
-    e.preventDefault();
-    setError(null);
-
-    if (!username.trim()) {
-      setError("Username is required.");
-      return;
-    }
-    if (!password) {
-      setError("Password is required.");
-      return;
-    }
-    if (mode === "register") {
-      if (password !== confirmPassword) {
-        setError("Passwords do not match.");
-        return;
-      }
-      if (password.length < 6) {
-        setError("Password must be at least 6 characters.");
-        return;
-      }
-    }
-
-    setLoading(true);
-    try {
-      const endpoint =
-        mode === "signin" ? "/api/auth/login" : "/api/auth/register";
-
-      const res = await fetch(endpoint, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ username: username.trim(), password }),
-      });
-
-      if (!res.ok) {
-        let message = mode === "signin" ? "Invalid credentials." : "Registration failed.";
-        try {
-          const data = await res.json();
-          if (data?.message || data?.error) {
-            message = data.message ?? data.error;
-          }
-        } catch {
-          // ignore parse errors
-        }
-        setError(message);
-        return;
-      }
-
-      // Success → navigate to app root
-      setLocation("/");
-    } catch {
-      setError("Network error. Please try again.");
-    } finally {
-      setLoading(false);
-    }
-  }
-
+function NexusWordmark() {
   return (
-    <div className="min-h-screen bg-background flex flex-col items-center justify-center px-4">
-      {/* Background glow */}
-      <div
-        className="pointer-events-none fixed inset-0 -z-10"
-        aria-hidden="true"
+    <div className="flex items-center gap-1 justify-center mb-1">
+      <svg
+        width="32"
+        height="32"
+        viewBox="0 0 32 32"
+        fill="none"
+        aria-label="NEXUS OS logo"
+        className="flex-shrink-0"
       >
-        <div className="absolute top-1/3 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[600px] h-[600px] rounded-full bg-indigo-600/10 blur-3xl" />
-        <div className="absolute top-2/3 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[400px] h-[400px] rounded-full bg-violet-700/10 blur-3xl" />
+        <rect
+          x="2"
+          y="2"
+          width="28"
+          height="28"
+          rx="6"
+          stroke="hsl(239 84% 67%)"
+          strokeWidth="2"
+        />
+        <path
+          d="M10 22V10l6 8 6-8v12"
+          stroke="hsl(263 70% 58%)"
+          strokeWidth="2.5"
+          strokeLinecap="round"
+          strokeLinejoin="round"
+        />
+      </svg>
+    </div>
+  );
+}
+
+function OAuthButtons({ label }: { label: string }) {
+  return (
+    <div className="space-y-2">
+      <div className="relative">
+        <div className="absolute inset-0 flex items-center">
+          <span className="w-full border-t border-border" />
+        </div>
+        <div className="relative flex justify-center text-xs">
+          <span className="bg-card px-2 text-muted-foreground">
+            — or continue with —
+          </span>
+        </div>
       </div>
 
+      <Button
+        type="button"
+        variant="outline"
+        className="w-full bg-[#24292e] hover:bg-[#2f363d] text-white border-[#444d56] hover:text-white"
+        onClick={() => (window.location.href = "/api/auth/github")}
+      >
+        <Github className="w-4 h-4 mr-2" />
+        {label} with GitHub
+      </Button>
+
+      <Button
+        type="button"
+        variant="outline"
+        className="w-full bg-white hover:bg-gray-50 text-gray-800 border-gray-300"
+        onClick={() => (window.location.href = "/api/auth/google")}
+      >
+        <span className="mr-2">
+          <GoogleIcon />
+        </span>
+        {label} with Google
+      </Button>
+    </div>
+  );
+}
+
+export default function LoginPage() {
+  const [, navigate] = useLocation();
+  const [tab, setTab] = useState<"signin" | "signup">("signin");
+
+  // Sign In state
+  const [signInEmail, setSignInEmail] = useState("");
+  const [signInPassword, setSignInPassword] = useState("");
+  const [signInError, setSignInError] = useState("");
+  const [signInLoading, setSignInLoading] = useState(false);
+
+  // Sign Up state
+  const [displayName, setDisplayName] = useState("");
+  const [signUpEmail, setSignUpEmail] = useState("");
+  const [signUpPassword, setSignUpPassword] = useState("");
+  const [confirmPassword, setConfirmPassword] = useState("");
+  const [signUpError, setSignUpError] = useState("");
+  const [signUpLoading, setSignUpLoading] = useState(false);
+
+  // Check URL params for OAuth errors
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const error = params.get("error");
+    if (error) {
+      const messages: Record<string, string> = {
+        oauth_failed: "OAuth sign-in failed. Please try again.",
+        oauth_cancelled: "OAuth sign-in was cancelled.",
+        account_exists: "An account with this email already exists.",
+        unauthorized: "Access denied. Please sign in.",
+      };
+      const msg = messages[error] ?? "Authentication error. Please try again.";
+      setSignInError(msg);
+    }
+  }, []);
+
+  const handleSignIn = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setSignInError("");
+    setSignInLoading(true);
+    try {
+      const res = await fetch("/api/auth/login", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email: signInEmail, password: signInPassword }),
+      });
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}));
+        setSignInError(data.message ?? "Invalid email or password.");
+        return;
+      }
+      window.location.href = "/#/";
+    } catch {
+      setSignInError("Network error. Please try again.");
+    } finally {
+      setSignInLoading(false);
+    }
+  };
+
+  const handleSignUp = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setSignUpError("");
+
+    if (signUpPassword !== confirmPassword) {
+      setSignUpError("Passwords do not match.");
+      return;
+    }
+    if (signUpPassword.length < 6) {
+      setSignUpError("Password must be at least 6 characters.");
+      return;
+    }
+
+    setSignUpLoading(true);
+    try {
+      const res = await fetch("/api/auth/register", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          email: signUpEmail,
+          password: signUpPassword,
+          displayName,
+        }),
+      });
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}));
+        setSignUpError(data.message ?? "Registration failed. Please try again.");
+        return;
+      }
+      window.location.href = "/#/";
+    } catch {
+      setSignUpError("Network error. Please try again.");
+    } finally {
+      setSignUpLoading(false);
+    }
+  };
+
+  return (
+    <div className="min-h-screen flex items-center justify-center p-4 bg-[radial-gradient(ellipse_at_top,_hsl(239_20%_12%)_0%,_hsl(var(--background))_70%)]">
       <div className="w-full max-w-md">
-        {/* Logo + branding */}
-        <div className="flex flex-col items-center mb-8 gap-3">
-          <NexusLogo size={52} />
-          <div className="text-center">
-            <h1 className="text-2xl font-bold text-foreground tracking-tight">
-              NEXUS OS
-            </h1>
-            <p className="text-muted-foreground text-sm mt-0.5">
-              Intelligent operations platform
-            </p>
-          </div>
+        {/* Logo & wordmark */}
+        <div className="text-center mb-6">
+          <NexusWordmark />
+          <h1 className="mt-2 text-2xl font-bold tracking-tight text-foreground">
+            <span className="font-extrabold">NEXUS</span>
+            <span className="font-light text-muted-foreground ml-1">OS</span>
+          </h1>
+          <p className="text-sm text-muted-foreground mt-1">
+            Intelligent trading infrastructure
+          </p>
         </div>
 
         {/* Card */}
-        <Card className="bg-card border border-border shadow-xl shadow-black/40">
-          {/* Mode toggle tabs */}
-          <CardHeader className="pb-0 pt-6 px-6">
-            <div className="flex bg-background rounded-lg p-1 gap-1">
-              <button
-                type="button"
-                onClick={() => switchMode("signin")}
-                className={`flex-1 py-2 text-sm font-medium rounded-md transition-colors ${
-                  mode === "signin"
-                    ? "bg-indigo-600 text-foreground shadow"
-                    : "text-muted-foreground hover:text-foreground"
-                }`}
+        <div className="bg-card border border-border rounded-2xl shadow-2xl overflow-hidden">
+          <Tabs
+            value={tab}
+            onValueChange={(v) => {
+              setTab(v as "signin" | "signup");
+              setSignInError("");
+              setSignUpError("");
+            }}
+          >
+            <TabsList className="w-full rounded-none border-b border-border bg-card h-12 p-0">
+              <TabsTrigger
+                value="signin"
+                className="flex-1 rounded-none h-full data-[state=active]:bg-transparent data-[state=active]:border-b-2 data-[state=active]:border-primary data-[state=active]:shadow-none text-sm"
               >
                 Sign In
-              </button>
-              <button
-                type="button"
-                onClick={() => switchMode("register")}
-                className={`flex-1 py-2 text-sm font-medium rounded-md transition-colors ${
-                  mode === "register"
-                    ? "bg-indigo-600 text-foreground shadow"
-                    : "text-muted-foreground hover:text-foreground"
-                }`}
+              </TabsTrigger>
+              <TabsTrigger
+                value="signup"
+                className="flex-1 rounded-none h-full data-[state=active]:bg-transparent data-[state=active]:border-b-2 data-[state=active]:border-primary data-[state=active]:shadow-none text-sm"
               >
-                Create Account
-              </button>
-            </div>
-          </CardHeader>
+                Sign Up
+              </TabsTrigger>
+            </TabsList>
 
-          <CardContent className="px-6 pt-5 pb-6">
-            <form onSubmit={handleSubmit} noValidate className="space-y-4">
-              {/* Error alert */}
-              {error && (
-                <Alert
-                  variant="destructive"
-                  className="bg-red-500/10 border-red-500/30 text-red-400"
-                >
-                  <AlertCircle className="h-4 w-4" />
-                  <AlertDescription>{error}</AlertDescription>
-                </Alert>
-              )}
-
-              {/* Username */}
-              <div className="space-y-1.5">
-                <Label
-                  htmlFor="username"
-                  className="text-foreground/80 text-sm"
-                >
-                  Username
-                </Label>
-                <Input
-                  id="username"
-                  type="text"
-                  autoComplete="username"
-                  placeholder="your_username"
-                  value={username}
-                  onChange={(e) => setUsername(e.target.value)}
-                  disabled={loading}
-                  className="bg-background border-border text-foreground placeholder-muted-foreground focus:border-indigo-500 focus:ring-indigo-500/30"
-                />
-              </div>
-
-              {/* Password */}
-              <div className="space-y-1.5">
-                <Label
-                  htmlFor="password"
-                  className="text-foreground/80 text-sm"
-                >
-                  Password
-                </Label>
-                <Input
-                  id="password"
-                  type="password"
-                  autoComplete={
-                    mode === "signin" ? "current-password" : "new-password"
-                  }
-                  placeholder="••••••••"
-                  value={password}
-                  onChange={(e) => setPassword(e.target.value)}
-                  disabled={loading}
-                  className="bg-background border-border text-foreground placeholder-muted-foreground focus:border-indigo-500 focus:ring-indigo-500/30"
-                />
-              </div>
-
-              {/* Confirm password (register only) */}
-              {mode === "register" && (
+            {/* Sign In */}
+            <TabsContent value="signin" className="p-6 space-y-4 mt-0">
+              <form onSubmit={handleSignIn} className="space-y-4">
                 <div className="space-y-1.5">
-                  <Label
-                    htmlFor="confirm-password"
-                    className="text-foreground/80 text-sm"
-                  >
-                    Confirm Password
-                  </Label>
+                  <Label htmlFor="signin-email">Email</Label>
                   <Input
-                    id="confirm-password"
-                    type="password"
-                    autoComplete="new-password"
-                    placeholder="••••••••"
-                    value={confirmPassword}
-                    onChange={(e) => setConfirmPassword(e.target.value)}
-                    disabled={loading}
-                    className="bg-background border-border text-foreground placeholder-muted-foreground focus:border-indigo-500 focus:ring-indigo-500/30"
+                    id="signin-email"
+                    type="email"
+                    placeholder="you@example.com"
+                    autoComplete="email"
+                    value={signInEmail}
+                    onChange={(e) => setSignInEmail(e.target.value)}
+                    required
                   />
                 </div>
-              )}
+                <div className="space-y-1.5">
+                  <Label htmlFor="signin-password">Password</Label>
+                  <Input
+                    id="signin-password"
+                    type="password"
+                    placeholder="••••••••"
+                    autoComplete="current-password"
+                    value={signInPassword}
+                    onChange={(e) => setSignInPassword(e.target.value)}
+                    required
+                  />
+                </div>
 
-              {/* Submit */}
-              <Button
-                type="submit"
-                disabled={loading}
-                className="w-full bg-indigo-600 hover:bg-indigo-500 text-foreground font-semibold mt-2 disabled:opacity-60"
-              >
-                {loading
-                  ? mode === "signin"
-                    ? "Signing in…"
-                    : "Creating account…"
-                  : mode === "signin"
-                  ? "Sign In"
-                  : "Create Account"}
-              </Button>
-            </form>
-          </CardContent>
-        </Card>
+                {signInError && (
+                  <p className="text-sm text-destructive bg-destructive/10 border border-destructive/20 rounded-md px-3 py-2">
+                    {signInError}
+                  </p>
+                )}
 
-        {/* Footer */}
+                <Button
+                  type="submit"
+                  className="w-full"
+                  disabled={signInLoading}
+                >
+                  {signInLoading ? "Signing in…" : "Sign In"}
+                </Button>
+              </form>
+
+              <OAuthButtons label="Sign in" />
+            </TabsContent>
+
+            {/* Sign Up */}
+            <TabsContent value="signup" className="p-6 space-y-4 mt-0">
+              <form onSubmit={handleSignUp} className="space-y-4">
+                <div className="space-y-1.5">
+                  <Label htmlFor="signup-name">Display Name</Label>
+                  <Input
+                    id="signup-name"
+                    type="text"
+                    placeholder="Your name"
+                    autoComplete="name"
+                    value={displayName}
+                    onChange={(e) => setDisplayName(e.target.value)}
+                    required
+                  />
+                </div>
+                <div className="space-y-1.5">
+                  <Label htmlFor="signup-email">Email</Label>
+                  <Input
+                    id="signup-email"
+                    type="email"
+                    placeholder="you@example.com"
+                    autoComplete="email"
+                    value={signUpEmail}
+                    onChange={(e) => setSignUpEmail(e.target.value)}
+                    required
+                  />
+                </div>
+                <div className="space-y-1.5">
+                  <Label htmlFor="signup-password">Password</Label>
+                  <Input
+                    id="signup-password"
+                    type="password"
+                    placeholder="••••••••"
+                    autoComplete="new-password"
+                    value={signUpPassword}
+                    onChange={(e) => setSignUpPassword(e.target.value)}
+                    required
+                  />
+                  <p className="text-xs text-muted-foreground">
+                    Minimum 6 characters
+                  </p>
+                </div>
+                <div className="space-y-1.5">
+                  <Label htmlFor="signup-confirm">Confirm Password</Label>
+                  <Input
+                    id="signup-confirm"
+                    type="password"
+                    placeholder="••••••••"
+                    autoComplete="new-password"
+                    value={confirmPassword}
+                    onChange={(e) => setConfirmPassword(e.target.value)}
+                    required
+                  />
+                </div>
+
+                {signUpError && (
+                  <p className="text-sm text-destructive bg-destructive/10 border border-destructive/20 rounded-md px-3 py-2">
+                    {signUpError}
+                  </p>
+                )}
+
+                <Button
+                  type="submit"
+                  className="w-full"
+                  disabled={signUpLoading}
+                >
+                  {signUpLoading ? "Creating account…" : "Create Account"}
+                </Button>
+              </form>
+
+              <OAuthButtons label="Sign up" />
+            </TabsContent>
+          </Tabs>
+        </div>
+
         <p className="text-center text-xs text-muted-foreground mt-6">
-          Powered by{" "}
-          <span className="text-indigo-500 font-medium">NEXUS OS</span>
+          By continuing, you agree to our{" "}
+          <span className="underline cursor-pointer hover:text-foreground">
+            Terms of Service
+          </span>{" "}
+          and{" "}
+          <span className="underline cursor-pointer hover:text-foreground">
+            Privacy Policy
+          </span>
+          .
         </p>
       </div>
     </div>

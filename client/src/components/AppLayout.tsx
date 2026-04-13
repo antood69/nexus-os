@@ -1,6 +1,21 @@
 import { Link, useLocation } from "wouter";
-import { LayoutDashboard, GitBranch, Bot, ShieldCheck, CreditCard, Zap, BookOpen, Target, Settings, Coins } from "lucide-react";
+import {
+  LayoutDashboard,
+  GitBranch,
+  Bot,
+  ShieldCheck,
+  CreditCard,
+  Zap,
+  BookOpen,
+  Target,
+  Settings,
+  Coins,
+  LogOut,
+  ShieldAlert,
+} from "lucide-react";
 import TokenCounter from "./TokenCounter";
+import { useAuth } from "@/hooks/useAuth";
+import { useEffect } from "react";
 
 const navItems = [
   { href: "/", label: "Dashboard", icon: LayoutDashboard },
@@ -23,21 +38,74 @@ function NexusLogo() {
   );
 }
 
+function UserAvatar({ name, email }: { name?: string; email?: string }) {
+  const initial = (name ?? email ?? "?")[0].toUpperCase();
+  return (
+    <div className="w-7 h-7 rounded-full bg-primary/20 flex items-center justify-center text-xs font-semibold text-primary flex-shrink-0 select-none">
+      {initial}
+    </div>
+  );
+}
+
 export default function AppLayout({ children }: { children: React.ReactNode }) {
   const [location] = useLocation();
+  const { user, isLoading, isAuthenticated, isOwner, logout } = useAuth();
+
+  // Redirect to login if not authenticated
+  useEffect(() => {
+    if (!isLoading && !isAuthenticated) {
+      window.location.href = "/#/login";
+    }
+  }, [isLoading, isAuthenticated]);
+
+  // While loading auth, show nothing to prevent flash
+  if (isLoading) {
+    return (
+      <div className="flex h-screen items-center justify-center bg-background">
+        <div className="w-6 h-6 border-2 border-primary border-t-transparent rounded-full animate-spin" />
+      </div>
+    );
+  }
+
+  // If not authenticated, render nothing (redirect is in progress)
+  if (!isAuthenticated) {
+    return null;
+  }
+
+  const displayLabel = user?.displayName ?? user?.email ?? "User";
 
   return (
     <div className="flex h-screen overflow-hidden bg-background">
       {/* Sidebar */}
       <aside className="w-56 flex-shrink-0 border-r border-border bg-sidebar flex flex-col">
+        {/* Logo */}
         <div className="flex items-center gap-2.5 px-4 h-14 border-b border-border">
           <NexusLogo />
           <span className="font-semibold text-sm tracking-tight text-foreground">NEXUS OS</span>
         </div>
 
+        {/* User info */}
+        <div className="px-3 py-3 border-b border-border">
+          <div className="flex items-center gap-2 px-2 py-1.5 rounded-md">
+            <UserAvatar name={user?.displayName} email={user?.email} />
+            <div className="flex-1 min-w-0">
+              <p className="text-xs font-medium text-foreground truncate">{displayLabel}</p>
+              {isOwner && (
+                <span className="inline-flex items-center gap-0.5 text-[10px] font-medium text-primary">
+                  <ShieldAlert className="w-2.5 h-2.5" />
+                  Owner
+                </span>
+              )}
+            </div>
+          </div>
+        </div>
+
+        {/* Navigation */}
         <nav className="flex-1 px-2 py-3 space-y-0.5 overflow-y-auto overscroll-contain">
           {navItems.map((item) => {
-            const isActive = location === item.href || (item.href !== "/" && location.startsWith(item.href));
+            const isActive =
+              location === item.href ||
+              (item.href !== "/" && location.startsWith(item.href));
             return (
               <Link key={item.href} href={item.href}>
                 <div
@@ -54,13 +122,34 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
               </Link>
             );
           })}
+
+          {/* Admin link — owner only */}
+          {isOwner && (
+            <Link href="/admin">
+              <div
+                data-testid="nav-admin"
+                className={`flex items-center gap-2.5 px-3 py-2 rounded-md text-sm cursor-pointer transition-colors ${
+                  location === "/admin"
+                    ? "bg-primary/15 text-primary font-medium"
+                    : "text-muted-foreground hover:bg-secondary hover:text-foreground"
+                }`}
+              >
+                <ShieldAlert className="w-4 h-4 flex-shrink-0" />
+                Admin
+              </div>
+            </Link>
+          )}
         </nav>
 
         <TokenCounter />
 
-        <div className="px-3 py-3 border-t border-border">
+        {/* Bottom section: plan + logout */}
+        <div className="px-3 py-3 border-t border-border space-y-1">
           <Link href="/pricing">
-            <div className="flex items-center gap-2 px-2 py-1.5 rounded-md hover:bg-secondary cursor-pointer transition-colors group" data-testid="sidebar-plan-badge">
+            <div
+              className="flex items-center gap-2 px-2 py-1.5 rounded-md hover:bg-secondary cursor-pointer transition-colors group"
+              data-testid="sidebar-plan-badge"
+            >
               <div className="w-7 h-7 rounded-full bg-primary/20 flex items-center justify-center text-xs font-medium text-primary flex-shrink-0">
                 N
               </div>
@@ -71,6 +160,15 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
               <Zap className="w-3 h-3 text-primary opacity-0 group-hover:opacity-100 transition-opacity flex-shrink-0" />
             </div>
           </Link>
+
+          <button
+            onClick={logout}
+            data-testid="sidebar-logout"
+            className="w-full flex items-center gap-2.5 px-3 py-2 rounded-md text-sm text-muted-foreground hover:bg-secondary hover:text-foreground cursor-pointer transition-colors"
+          >
+            <LogOut className="w-4 h-4 flex-shrink-0" />
+            Logout
+          </button>
         </div>
       </aside>
 

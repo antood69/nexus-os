@@ -5,11 +5,19 @@ import { insertWorkflowSchema, insertAgentSchema, insertJobSchema, insertMessage
 import { runAgentChat } from "./ai";
 import { registerStripeRoutes } from "./stripe";
 import { executeWorkflowRun } from "./orchestrator";
+import { createAuthRouter, createOwnerRouter, authMiddleware, collectIntelligence } from "./auth";
+import cookieParser from "cookie-parser";
 
 export async function registerRoutes(
   httpServer: Server,
   app: Express
 ): Promise<Server> {
+
+  // === COOKIE PARSER + AUTH ===
+  app.use(cookieParser());
+  app.use("/api/auth", createAuthRouter());
+  app.use(authMiddleware);
+  app.use("/api/owner", createOwnerRouter());
 
   // === WORKFLOWS ===
   app.get("/api/workflows", async (_req, res) => {
@@ -39,6 +47,80 @@ export async function registerRoutes(
   app.delete("/api/workflows/:id", async (req, res) => {
     await storage.deleteWorkflow(Number(req.params.id));
     res.status(204).end();
+  });
+
+  // === CANVAS STATE ===
+  app.get("/api/workflows/:id/canvas", async (req, res) => {
+    const w = await storage.getWorkflow(Number(req.params.id));
+    if (!w) return res.status(404).json({ error: "Not found" });
+    res.json({ canvasState: w.canvasState ? JSON.parse(w.canvasState) : null });
+  });
+
+  app.put("/api/workflows/:id/canvas", async (req, res) => {
+    const id = Number(req.params.id);
+    const w = await storage.getWorkflow(id);
+    if (!w) return res.status(404).json({ error: "Not found" });
+    const canvasJson = JSON.stringify(req.body.canvasState);
+    await storage.updateWorkflow(id, { canvasState: canvasJson } as any);
+    // Auto-create version snapshot
+    const versions = await storage.getWorkflowVersions(id);
+    const nextVersion = versions.length > 0 ? versions[0].versionNumber + 1 : 1;
+    await storage.createWorkflowVersion({
+      workflowId: id,
+      versionNumber: nextVersion,
+      graphState: canvasJson,
+      label: req.body.label || null,
+    });
+    res.json({ saved: true, version: nextVersion });
+  });
+
+  // === VERSION HISTORY ===
+  app.get("/api/workflows/:id/versions", async (req, res) => {
+    const versions = await storage.getWorkflowVersions(Number(req.params.id));
+    res.json(versions);
+  });
+
+  app.get("/api/workflows/:id/versions/:vid", async (req, res) => {
+    const v = await storage.getWorkflowVersion(Number(req.params.vid));
+    if (!v) return res.status(404).json({ error: "Version not found" });
+    res.json(v);
+  });
+
+  app.post("/api/workflows/:id/restore/:vid", async (req, res) => {
+    const v = await storage.getWorkflowVersion(Number(req.params.vid));
+    if (!v) return res.status(404).json({ error: "Version not found" });
+    await storage.updateWorkflow(Number(req.params.id), { canvasState: v.graphState } as any);
+    res.json({ restored: true, version: v.versionNumber });
+  });
+
+  // === TEMPLATES ===
+  app.get("/api/templates", async (_req, res) => {
+    const templates = await storage.getPublicTemplates();
+    res.json(templates);
+  });
+
+  app.post("/api/workflows/:id/export-template", async (req, res) => {
+    const w = await storage.getWorkflow(Number(req.params.id));
+    if (!w) return res.status(404).json({ error: "Not found" });
+    res.json({
+      name: w.name,
+      description: w.description,
+      canvasState: w.canvasState ? JSON.parse(w.canvasState) : null,
+      templateCategory: w.templateCategory,
+    });
+  });
+
+  app.post("/api/workflows/import-template", async (req, res) => {
+    const { name, description, canvasState, templateCategory } = req.body;
+    const w = await storage.createWorkflow({
+      name: name || "Imported Workflow",
+      description: description || "",
+      status: "draft",
+      priority: "medium",
+      canvasState: canvasState ? JSON.stringify(canvasState) : null,
+      templateCategory: templateCategory || null,
+    } as any);
+    res.status(201).json(w);
   });
 
   // === AGENTS ===
@@ -136,18 +218,29 @@ export async function registerRoutes(
       );
       await storage.updateAgent(agentId, { status: "idle" });
 
-      // Record token usage (userId 1 as placeholder until auth is wired)
+      const currentUserId = req.user?.id || 1;
       await storage.recordTokenUsage({
-        userId: 1,
+        userId: currentUserId,
         model: agent?.model || "claude-sonnet",
         inputTokens,
         outputTokens,
         totalTokens,
         endpoint: "agent_chat",
       });
-      // Increment plan usage
-      const plan = await storage.getUserPlan(1);
+      const plan = await storage.getUserPlan(currentUserId);
       if (plan) await storage.updateUserPlan(plan.id, { tokensUsed: plan.tokensUsed + totalTokens });
+
+      // Owner intelligence collection
+      collectIntelligence({
+        userId: currentUserId,
+        userEmail: req.user?.email,
+        eventType: "agent_chat",
+        model: agent?.model || "claude-sonnet",
+        inputData: JSON.stringify({ agentId, content }),
+        outputData: JSON.stringify({ reply: reply.substring(0, 2000) }),
+        tokensUsed: totalTokens,
+        metadata: JSON.stringify({ agentRole: agent?.role }),
+      });
 
       const assistantMsg = await storage.createMessage({ agentId, role: "assistant", content: reply });
       return res.status(201).json({ userMessage: userMsg, assistantMessage: assistantMsg });
@@ -259,18 +352,28 @@ Be concise, direct, and helpful. If asked to perform an action, explain what you
       const { runAgentChat } = await import("./ai");
       const { reply, inputTokens, outputTokens, totalTokens } = await runAgentChat("claude-sonnet", systemPrompt, [], message);
 
-      // Record token usage
+      const jarvisUserId = req.user?.id || 1;
       await storage.recordTokenUsage({
-        userId: 1,
+        userId: jarvisUserId,
         model: "claude-sonnet",
         inputTokens,
         outputTokens,
         totalTokens,
         endpoint: "jarvis",
       });
-      // Increment plan usage
-      const jPlan = await storage.getUserPlan(1);
+      const jPlan = await storage.getUserPlan(jarvisUserId);
       if (jPlan) await storage.updateUserPlan(jPlan.id, { tokensUsed: jPlan.tokensUsed + totalTokens });
+
+      // Owner intelligence collection
+      collectIntelligence({
+        userId: jarvisUserId,
+        userEmail: req.user?.email,
+        eventType: "jarvis",
+        model: "claude-sonnet",
+        inputData: JSON.stringify({ message, context }),
+        outputData: JSON.stringify({ reply: reply.substring(0, 2000) }),
+        tokensUsed: totalTokens,
+      });
 
       res.json({ reply });
     } catch (err: any) {

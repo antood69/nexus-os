@@ -9,10 +9,17 @@ export const workflows = sqliteTable("workflows", {
   description: text("description"),
   status: text("status").notNull().default("draft"), // draft | active | paused | completed
   priority: text("priority").notNull().default("medium"), // low | medium | high | critical
+  canvasState: text("canvas_state"), // JSON: React Flow nodes + edges
+  isTemplate: integer("is_template").default(0), // 0 | 1
+  templateCategory: text("template_category"),
+  templateDescription: text("template_description"),
+  isPublic: integer("is_public").default(0), // 0 | 1
+  forkCount: integer("fork_count").default(0),
+  useCount: integer("use_count").default(0),
   createdAt: text("created_at").notNull().default(""),
 });
 
-export const insertWorkflowSchema = createInsertSchema(workflows).omit({ id: true, createdAt: true });
+export const insertWorkflowSchema = createInsertSchema(workflows).omit({ id: true, createdAt: true, forkCount: true, useCount: true });
 export type InsertWorkflow = z.infer<typeof insertWorkflowSchema>;
 export type Workflow = typeof workflows.$inferSelect;
 
@@ -74,22 +81,53 @@ export const insertAuditReviewSchema = createInsertSchema(auditReviews).omit({ i
 export type InsertAuditReview = z.infer<typeof insertAuditReviewSchema>;
 export type AuditReview = typeof auditReviews.$inferSelect;
 
-// Users table (for SaaS auth)
+// Users table (full auth system)
 export const users = sqliteTable("users", {
   id: integer("id").primaryKey({ autoIncrement: true }),
   username: text("username").notNull().unique(),
-  password: text("password").notNull(),
+  email: text("email").notNull().unique(),
+  passwordHash: text("password_hash"), // null for OAuth-only users
+  displayName: text("display_name"),
+  avatarUrl: text("avatar_url"),
+  authProvider: text("auth_provider").notNull().default("email"), // email | google | github
+  providerId: text("provider_id"), // OAuth provider user ID
+  role: text("role").notNull().default("user"), // user | admin | owner
   tier: text("tier").notNull().default("free"), // free | starter | pro | agency
   stripeCustomerId: text("stripe_customer_id"),
   subscriptionId: text("subscription_id"),
+  lastLoginAt: text("last_login_at"),
+  createdAt: text("created_at").notNull().default(""),
 });
 
-export const insertUserSchema = createInsertSchema(users).pick({
-  username: true,
-  password: true,
-});
+export const insertUserSchema = createInsertSchema(users).omit({ id: true, createdAt: true });
 export type InsertUser = z.infer<typeof insertUserSchema>;
 export type User = typeof users.$inferSelect;
+
+// Sessions table
+export const sessions = sqliteTable("sessions", {
+  id: text("id").primaryKey(), // UUID session token
+  userId: integer("user_id").notNull(),
+  expiresAt: text("expires_at").notNull(),
+  createdAt: text("created_at").notNull().default(""),
+});
+export type Session = typeof sessions.$inferSelect;
+
+// Owner Intelligence — collects all user generations for the owner's AI training
+export const ownerIntelligence = sqliteTable("owner_intelligence", {
+  id: integer("id").primaryKey({ autoIncrement: true }),
+  userId: integer("user_id").notNull(),
+  userEmail: text("user_email"),
+  eventType: text("event_type").notNull(), // agent_chat | jarvis | workflow_run | generation
+  model: text("model"),
+  inputData: text("input_data"), // JSON: what the user sent
+  outputData: text("output_data"), // JSON: what the AI returned
+  tokensUsed: integer("tokens_used").default(0),
+  quality: text("quality"), // good | bad | neutral — can be tagged later
+  tags: text("tags"), // JSON array for categorization
+  metadata: text("metadata"), // JSON: any extra context
+  createdAt: text("created_at").notNull().default(""),
+});
+export type OwnerIntelligence = typeof ownerIntelligence.$inferSelect;
 
 // Escalations — agent watchdog escalation records
 export const escalations = sqliteTable("escalations", {
@@ -237,3 +275,16 @@ export const agentExecutions = sqliteTable("agent_executions", {
 export const insertAgentExecutionSchema = createInsertSchema(agentExecutions).omit({ id: true, createdAt: true });
 export type InsertAgentExecution = z.infer<typeof insertAgentExecutionSchema>;
 export type AgentExecution = typeof agentExecutions.$inferSelect;
+
+// Workflow Versions — version history for the canvas editor
+export const workflowVersions = sqliteTable("workflow_versions", {
+  id: integer("id").primaryKey({ autoIncrement: true }),
+  workflowId: integer("workflow_id").notNull(),
+  versionNumber: integer("version_number").notNull(),
+  graphState: text("graph_state").notNull(), // JSON: full node/edge state snapshot
+  label: text("label"), // optional user label
+  createdAt: text("created_at").notNull().default(""),
+});
+export const insertWorkflowVersionSchema = createInsertSchema(workflowVersions).omit({ id: true, createdAt: true });
+export type InsertWorkflowVersion = z.infer<typeof insertWorkflowVersionSchema>;
+export type WorkflowVersion = typeof workflowVersions.$inferSelect;
