@@ -545,6 +545,29 @@ sqlite.exec(`
     icon TEXT,
     created_at TEXT DEFAULT (datetime('now'))
   );
+
+  CREATE TABLE IF NOT EXISTS boss_conversations (
+    id TEXT PRIMARY KEY,
+    user_id INTEGER NOT NULL,
+    title TEXT NOT NULL DEFAULT 'New conversation',
+    created_at TEXT NOT NULL DEFAULT ''
+  );
+
+  CREATE TABLE IF NOT EXISTS boss_messages (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    conversation_id TEXT NOT NULL,
+    role TEXT NOT NULL,
+    content TEXT NOT NULL,
+    created_at TEXT NOT NULL DEFAULT ''
+  );
+
+  CREATE TABLE IF NOT EXISTS daily_usage (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    user_id INTEGER NOT NULL,
+    date TEXT NOT NULL,
+    credits_used INTEGER NOT NULL DEFAULT 0,
+    UNIQUE(user_id, date)
+  );
 `);
 
 // Seed products
@@ -2701,6 +2724,63 @@ export class DatabaseStorage implements IStorage {
     const row = sqlite.prepare('SELECT * FROM workflow_presets WHERE id = ?').get(id) as any;
     if (!row) return undefined;
     return { id: row.id, productId: row.product_id, name: row.name, description: row.description, category: row.category, templateData: row.template_data, icon: row.icon, createdAt: row.created_at };
+  }
+
+  // ── Boss Conversations ────────────────────────────────────────────────────
+  async createConversation(data: { id: string; userId: number; title: string }): Promise<any> {
+    const now = new Date().toISOString();
+    sqlite.prepare('INSERT INTO boss_conversations (id, user_id, title, created_at) VALUES (?, ?, ?, ?)').run(data.id, data.userId, data.title, now);
+    return { id: data.id, userId: data.userId, title: data.title, createdAt: now };
+  }
+
+  async getConversations(userId: number): Promise<any[]> {
+    const rows = sqlite.prepare('SELECT * FROM boss_conversations WHERE user_id = ? ORDER BY created_at DESC LIMIT 50').all(userId) as any[];
+    return rows.map(r => ({ id: r.id, userId: r.user_id, title: r.title, createdAt: r.created_at }));
+  }
+
+  async getConversation(id: string): Promise<any> {
+    const row = sqlite.prepare('SELECT * FROM boss_conversations WHERE id = ?').get(id) as any;
+    if (!row) return undefined;
+    return { id: row.id, userId: row.user_id, title: row.title, createdAt: row.created_at };
+  }
+
+  async updateConversation(id: string, data: { title?: string }): Promise<any> {
+    if (data.title) sqlite.prepare('UPDATE boss_conversations SET title = ? WHERE id = ?').run(data.title, id);
+    return this.getConversation(id);
+  }
+
+  async deleteConversation(id: string): Promise<void> {
+    sqlite.prepare('DELETE FROM boss_messages WHERE conversation_id = ?').run(id);
+    sqlite.prepare('DELETE FROM boss_conversations WHERE id = ?').run(id);
+  }
+
+  async getConversationMessages(conversationId: string): Promise<any[]> {
+    const rows = sqlite.prepare('SELECT * FROM boss_messages WHERE conversation_id = ? ORDER BY id ASC').all(conversationId) as any[];
+    return rows.map(r => ({ id: r.id, conversationId: r.conversation_id, role: r.role, content: r.content, createdAt: r.created_at }));
+  }
+
+  async addConversationMessage(data: { conversationId: string; role: string; content: string }): Promise<any> {
+    const now = new Date().toISOString();
+    const result = sqlite.prepare('INSERT INTO boss_messages (conversation_id, role, content, created_at) VALUES (?, ?, ?, ?)').run(data.conversationId, data.role, data.content, now);
+    return { id: Number(result.lastInsertRowid), conversationId: data.conversationId, role: data.role, content: data.content, createdAt: now };
+  }
+
+  // ── Daily Usage (Rate Limiting) ───────────────────────────────────────────
+  async getDailyUsage(userId: number, date: string): Promise<number> {
+    const row = sqlite.prepare('SELECT credits_used FROM daily_usage WHERE user_id = ? AND date = ?').get(userId, date) as any;
+    return row?.credits_used || 0;
+  }
+
+  async addDailyUsage(userId: number, date: string, credits: number): Promise<void> {
+    sqlite.prepare('INSERT INTO daily_usage (user_id, date, credits_used) VALUES (?, ?, ?) ON CONFLICT(user_id, date) DO UPDATE SET credits_used = credits_used + ?').run(userId, date, credits, credits);
+  }
+
+  // ── DB Health Check ───────────────────────────────────────────────────────
+  async checkHealth(): Promise<boolean> {
+    try {
+      sqlite.prepare('SELECT 1').get();
+      return true;
+    } catch { return false; }
   }
 }
 

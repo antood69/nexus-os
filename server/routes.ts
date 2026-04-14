@@ -5,9 +5,46 @@ import { insertWorkflowSchema, insertAgentSchema, insertJobSchema, insertMessage
 import { runAgentChat } from "./ai";
 import { registerStripeRoutes } from "./stripe";
 import { executeWorkflowRun } from "./orchestrator";
-import { createAuthRouter, createOwnerRouter, authMiddleware, collectIntelligence } from "./auth";
+import { createAuthRouter, createOwnerRouter, authMiddleware, collectIntelligence, isOwnerBypass, adminOnly } from "./auth";
 import { createMarketplaceRouter } from "./marketplace";
 import cookieParser from "cookie-parser";
+import { SERVER_START_TIME } from "./index";
+
+// ── Rate Limiting Config ────────────────────────────────────────────────────
+const TIER_CREDITS: Record<string, number> = {
+  free: 3000,
+  starter: 40000,
+  pro: 200000,
+  agency: 800000,
+};
+
+function getDailyCap(tier: string): number {
+  const monthly = TIER_CREDITS[tier] || 3000;
+  return Math.ceil(monthly / 28); // ~daily cap with some burst room
+}
+
+async function checkRateLimit(userId: number, email: string, tier: string): Promise<{ allowed: boolean; reason?: string; monthlyUsed?: number; monthlyLimit?: number; dailyUsed?: number; dailyCap?: number }> {
+  // Owner bypass
+  if (isOwnerBypass(email)) return { allowed: true };
+
+  const plan = await storage.getUserPlan(userId);
+  const monthlyLimit = TIER_CREDITS[tier] || 3000;
+  const monthlyUsed = plan?.tokensUsed || 0;
+
+  if (monthlyUsed >= monthlyLimit) {
+    return { allowed: false, reason: "monthly", monthlyUsed, monthlyLimit };
+  }
+
+  const today = new Date().toISOString().split("T")[0];
+  const dailyUsed = await storage.getDailyUsage(userId, today);
+  const dailyCap = getDailyCap(tier);
+
+  if (dailyUsed >= dailyCap) {
+    return { allowed: false, reason: "daily", dailyUsed, dailyCap, monthlyUsed, monthlyLimit };
+  }
+
+  return { allowed: true, monthlyUsed, monthlyLimit, dailyUsed, dailyCap };
+}
 
 export async function registerRoutes(
   httpServer: Server,
@@ -194,6 +231,21 @@ export async function registerRoutes(
     const agentId = Number(req.params.id);
     const { content, role } = req.body;
 
+    // Rate limit check for AI calls
+    if (role === "user") {
+      const uid = req.user?.id || 1;
+      const rl = await checkRateLimit(uid, req.user?.email || "", req.user?.tier || "free");
+      if (!rl.allowed) {
+        return res.status(429).json({
+          error: rl.reason === "daily"
+            ? "Daily limit reached. Come back tomorrow or upgrade your plan."
+            : "Monthly credit limit reached. Upgrade to continue.",
+          limitType: rl.reason,
+          upgradePath: "/pricing",
+        });
+      }
+    }
+
     // Only trigger AI when the user sends a message
     if (role !== "user") {
       const parsed = insertMessageSchema.safeParse({ agentId, role, content });
@@ -231,6 +283,9 @@ export async function registerRoutes(
       });
       const plan = await storage.getUserPlan(currentUserId);
       if (plan) await storage.updateUserPlan(plan.id, { tokensUsed: plan.tokensUsed + totalTokens });
+      // Track daily usage for rate limiting
+      const todayAgent = new Date().toISOString().split("T")[0];
+      await storage.addDailyUsage(currentUserId, todayAgent, totalTokens);
 
       // Owner intelligence collection
       collectIntelligence({
@@ -340,6 +395,23 @@ export async function registerRoutes(
     const { message, context, history, provider, model } = req.body as { message: string; context?: string; history?: { role: "user" | "assistant"; content: string }[]; provider?: string; model?: string };
     if (!message) return res.status(400).json({ error: "message required" });
 
+    // Rate limit check
+    const userId = req.user?.id || 1;
+    const userEmail = req.user?.email || "";
+    const userTier = req.user?.tier || "free";
+    const rl = await checkRateLimit(userId, userEmail, userTier);
+    if (!rl.allowed) {
+      const isDaily = rl.reason === "daily";
+      return res.status(429).json({
+        error: isDaily
+          ? "You've hit your daily limit. Come back tomorrow or upgrade your plan for more credits."
+          : "You've reached your monthly credit limit. Upgrade your plan to continue.",
+        limitType: rl.reason,
+        ...(isDaily ? { dailyUsed: rl.dailyUsed, dailyCap: rl.dailyCap } : { monthlyUsed: rl.monthlyUsed, monthlyLimit: rl.monthlyLimit }),
+        upgradePath: "/pricing",
+      });
+    }
+
     const systemPrompt = `You are The Boss, the AI brain behind Bunz. You're sharp, efficient, and a little cocky — like a founder who's been through it. Help users build workflows, create agents, understand their data, and ship faster. Keep it real, keep it brief, and always push toward action.`;
 
     try {
@@ -368,6 +440,10 @@ export async function registerRoutes(
       });
       const jPlan = await storage.getUserPlan(jarvisUserId);
       if (jPlan) await storage.updateUserPlan(jPlan.id, { tokensUsed: jPlan.tokensUsed + totalTokens });
+
+      // Track daily usage for rate limiting
+      const today = new Date().toISOString().split("T")[0];
+      await storage.addDailyUsage(jarvisUserId, today, totalTokens);
 
       // Owner intelligence collection
       collectIntelligence({
@@ -458,8 +534,8 @@ export async function registerRoutes(
   // === TOKEN ECONOMY ===
 
   // Get current user's plan + usage summary
-  app.get("/api/tokens/status", async (_req, res) => {
-    const userId = 1; // placeholder until auth
+  app.get("/api/tokens/status", async (req, res) => {
+    const userId = req.user?.id || 1;
     let plan = await storage.getUserPlan(userId);
     if (!plan) {
       // Auto-create free plan
@@ -1697,6 +1773,78 @@ export async function registerRoutes(
       completedOrders: completed.length,
       byStatus,
     });
+  });
+
+  // ── Health Check ──────────────────────────────────────────────────────────
+  app.get("/api/health", async (_req, res) => {
+    const dbOk = await storage.checkHealth();
+    const uptimeMs = Date.now() - (SERVER_START_TIME || Date.now());
+    const uptimeSec = Math.floor(uptimeMs / 1000);
+    const hours = Math.floor(uptimeSec / 3600);
+    const mins = Math.floor((uptimeSec % 3600) / 60);
+    const secs = uptimeSec % 60;
+    res.json({
+      status: dbOk ? "ok" : "degraded",
+      version: "0.1.0-alpha",
+      uptime: `${hours}h ${mins}m ${secs}s`,
+      uptimeSeconds: uptimeSec,
+      db: dbOk,
+      redis: false, // Redis not yet integrated
+      timestamp: new Date().toISOString(),
+    });
+  });
+
+  // ── Rate Limit Check (client can query before AI calls) ─────────────────
+  app.get("/api/rate-limit/status", async (req, res) => {
+    const userId = req.user?.id || 1;
+    const email = req.user?.email || "";
+    const tier = req.user?.tier || "free";
+    const result = await checkRateLimit(userId, email, tier);
+    res.json(result);
+  });
+
+  // ── Boss Conversations (Persistence) ────────────────────────────────────
+  app.get("/api/conversations", async (req, res) => {
+    const userId = req.user?.id || 1;
+    const convs = await storage.getConversations(userId);
+    res.json(convs);
+  });
+
+  app.post("/api/conversations", async (req, res) => {
+    const userId = req.user?.id || 1;
+    const { id, title } = req.body;
+    if (!id) return res.status(400).json({ error: "id is required" });
+    const conv = await storage.createConversation({ id, userId, title: title || "New conversation" });
+    res.status(201).json(conv);
+  });
+
+  app.get("/api/conversations/:id", async (req, res) => {
+    const conv = await storage.getConversation(req.params.id);
+    if (!conv) return res.status(404).json({ error: "Not found" });
+    res.json(conv);
+  });
+
+  app.get("/api/conversations/:id/messages", async (req, res) => {
+    const msgs = await storage.getConversationMessages(req.params.id);
+    res.json(msgs);
+  });
+
+  app.post("/api/conversations/:id/messages", async (req, res) => {
+    const { role, content } = req.body;
+    if (!role || !content) return res.status(400).json({ error: "role and content required" });
+    const msg = await storage.addConversationMessage({ conversationId: req.params.id, role, content });
+    res.status(201).json(msg);
+  });
+
+  app.patch("/api/conversations/:id", async (req, res) => {
+    const { title } = req.body;
+    const conv = await storage.updateConversation(req.params.id, { title });
+    res.json(conv);
+  });
+
+  app.delete("/api/conversations/:id", async (req, res) => {
+    await storage.deleteConversation(req.params.id);
+    res.status(204).end();
   });
 
   return httpServer;

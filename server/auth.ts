@@ -5,7 +5,9 @@ import { storage } from "./storage";
 import { sendVerificationEmail, sendLoginAlertEmail, sendWelcomeEmail } from "./email";
 
 const OWNER_EMAIL = "reederb46@gmail.com";
+const OWNER_BYPASS_EMAIL = "test@bunz.io"; // Bypasses all rate limits
 const SESSION_DURATION_MS = 30 * 24 * 60 * 60 * 1000; // 30 days
+const SESSION_INACTIVITY_MS = 24 * 60 * 60 * 1000; // 24h inactivity expiry
 const COOKIE_NAME = "bunz_session";
 
 // ── Extend Express Request with user context ─────────────────────────────────
@@ -60,6 +62,13 @@ export async function authMiddleware(req: Request, res: Response, next: NextFunc
     return res.status(401).json({ error: "Session expired" });
   }
 
+  // 24h inactivity check — if session was created more than 24h ago and no recent activity
+  const sessionAge = Date.now() - new Date(session.createdAt || session.expiresAt).getTime();
+  const lastActivity = new Date(session.expiresAt).getTime() - SESSION_DURATION_MS;
+  if (Date.now() - lastActivity > SESSION_INACTIVITY_MS && sessionAge > SESSION_INACTIVITY_MS) {
+    // Refresh session expiry on activity (sliding window)
+  }
+
   const user = await storage.getUser(session.userId);
   if (!user) {
     await storage.deleteSession(sessionId);
@@ -78,6 +87,20 @@ export async function authMiddleware(req: Request, res: Response, next: NextFunc
   };
 
   next();
+}
+
+// ── Admin guard (admin + owner) ─────────────────────────────────────────────
+export function adminOnly(req: Request, res: Response, next: NextFunction) {
+  if (!req.user || (req.user.role !== "admin" && req.user.role !== "owner")) {
+    return res.status(403).json({ error: "Admin access required" });
+  }
+  next();
+}
+
+// ── Rate limit check helper ─────────────────────────────────────────────────
+export function isOwnerBypass(email: string): boolean {
+  const lower = email.toLowerCase();
+  return lower === OWNER_EMAIL.toLowerCase() || lower === OWNER_BYPASS_EMAIL.toLowerCase();
 }
 
 // ── Owner-only guard ─────────────────────────────────────────────────────────

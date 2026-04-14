@@ -477,7 +477,7 @@ export default function WorkflowDetailPage() {
 
   // ── Fetch workflow ──────────────────────────────────────────────────────────
 
-  const { data: workflow } = useQuery<Workflow>({
+  const { data: workflow, isLoading: workflowLoading } = useQuery<Workflow>({
     queryKey: ["/api/workflows", workflowId],
   });
 
@@ -681,11 +681,12 @@ export default function WorkflowDetailPage() {
     [saveCanvasMutation]
   );
 
-  // Loading state
-  if (!workflow) {
+  // Loading state for Visual Editor
+  if (!workflow || workflowLoading) {
     return (
-      <div className="flex items-center justify-center h-full">
-        <div className="w-6 h-6 border-2 border-primary/30 border-t-primary rounded-full animate-spin" />
+      <div className="flex flex-col items-center justify-center h-full gap-3">
+        <div className="w-8 h-8 border-2 border-primary/30 border-t-primary rounded-full animate-spin" />
+        <p className="text-sm text-muted-foreground">Loading workflow editor...</p>
       </div>
     );
   }

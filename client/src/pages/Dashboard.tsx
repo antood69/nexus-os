@@ -9,6 +9,32 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { apiRequest } from "@/lib/queryClient";
 
+// ── Skeleton Loader ──────────────────────────────────────────────────────────
+function SkeletonCard() {
+  return (
+    <Card className="bg-card border border-border animate-pulse">
+      <CardContent className="pt-5 pb-4 px-5">
+        <div className="flex items-start justify-between">
+          <div className="space-y-2 flex-1">
+            <div className="h-3 w-20 bg-muted rounded" />
+            <div className="h-7 w-16 bg-muted rounded" />
+            <div className="h-3 w-24 bg-muted rounded" />
+          </div>
+          <div className="w-9 h-9 bg-muted rounded-lg" />
+        </div>
+      </CardContent>
+    </Card>
+  );
+}
+
+function SkeletonSection({ count = 4 }: { count?: number }) {
+  return (
+    <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+      {Array.from({ length: count }).map((_, i) => <SkeletonCard key={i} />)}
+    </div>
+  );
+}
+
 function formatTokens(n: number): string {
   if (n >= 1_000_000) return `${(n / 1_000_000).toFixed(1)}M`;
   if (n >= 1_000) return `${(n / 1_000).toFixed(0)}K`;
@@ -85,7 +111,7 @@ function QuickAction({ href, icon: Icon, label, color }: {
 
 // ── Main Dashboard ────────────────────────────────────────────────────────
 export default function Dashboard() {
-  const { data: tokenStatus } = useQuery<{ plan: { tokensUsed: number; monthlyTokens: number; tier: string; tokensRemaining: number } }>({
+  const { data: tokenStatus, isLoading: tokenLoading } = useQuery<{ plan: { tokensUsed: number; monthlyTokens: number; tier: string; tokensRemaining: number } }>({
     queryKey: ["token-status"],
     queryFn: async () => {
       const res = await fetch("/api/tokens/status");
@@ -94,7 +120,7 @@ export default function Dashboard() {
     },
   });
 
-  const { data: feed } = useQuery<{
+  const { data: feed, isLoading: feedLoading } = useQuery<{
     recentTrades: any[];
     activeBots: number;
     openOrders: number;
@@ -147,7 +173,7 @@ export default function Dashboard() {
         {/* Quick Stats Grid */}
         <section>
           <h2 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-3">Platform Stats</h2>
-          <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+          {(tokenLoading || feedLoading) ? <SkeletonSection /> : <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
             <KpiCard
               icon={Coins}
               label="Token Usage"
@@ -176,7 +202,7 @@ export default function Dashboard() {
               sub={`${feed?.activeDeployments ?? 0} deployed`}
               color="emerald"
             />
-          </div>
+          </div>}
         </section>
 
         {/* P&L Sparkline + Escalations */}

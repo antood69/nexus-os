@@ -59,15 +59,30 @@ app.use((req, res, next) => {
   next();
 });
 
+// ── Unhandled rejection / uncaught exception handlers ──────────────────────
+process.on("unhandledRejection", (reason: any) => {
+  console.error("[FATAL] Unhandled Promise Rejection:", reason?.stack || reason);
+});
+process.on("uncaughtException", (err: Error) => {
+  console.error("[FATAL] Uncaught Exception:", err.stack || err.message);
+});
+
+const SERVER_START_TIME = Date.now();
+export { SERVER_START_TIME };
+
 (async () => {
   await registerRoutes(httpServer, app);
 
   app.use((err: any, _req: Request, res: Response, next: NextFunction) => {
     const status = err.status || err.statusCode || 500;
     const message = err.message || "Internal Server Error";
-    console.error("Internal Server Error:", err);
+    console.error("Internal Server Error:", err?.stack || err);
     if (res.headersSent) return next(err);
-    return res.status(status).json({ message });
+    return res.status(status).json({
+      error: status >= 500 ? "Something went wrong. Please try again." : message,
+      message,
+      status,
+    });
   });
 
   serveStatic(app);

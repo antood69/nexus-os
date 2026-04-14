@@ -43,38 +43,36 @@ function AppRouter() {
       <Route path="/marketplace" component={() => <AppLayout allowPublic><ErrorBoundary><MarketplacePage /></ErrorBoundary></AppLayout>} />
       <Route path="/marketplace/:id" component={() => <AppLayout allowPublic><ErrorBoundary><MarketplaceDetailPage /></ErrorBoundary></AppLayout>} />
 
-      {/* Protected routes — wrapped in AppLayout */}
+      {/* Protected routes — wrapped in AppLayout, each major section gets its own ErrorBoundary */}
       <Route>
         <AppLayout>
-          <ErrorBoundary>
           <Switch>
-            <Route path="/" component={Dashboard} />
-            <Route path="/boss" component={BossPage} />
-            <Route path="/workflows" component={WorkflowsPage} />
-            <Route path="/workflows/:id" component={WorkflowDetailPage} />
-            <Route path="/agents" component={AgentsPage} />
-            <Route path="/agents/:id/chat" component={AgentChatPage} />
-            <Route path="/audit" component={AuditPage} />
-            <Route path="/pricing" component={PricingPage} />
-            <Route path="/journal" component={TradingJournalPage} />
-            <Route path="/bot-challenge" component={BotChallengePage} />
-            <Route path="/settings" component={SettingsPage} />
-            <Route path="/usage" component={TokenUsagePage} />
-            <Route path="/admin" component={AdminPage} />
-            <Route path="/marketplace" component={MarketplacePage} />
-            <Route path="/marketplace/my" component={MyListingsPage} />
-            <Route path="/marketplace/:id" component={MarketplaceDetailPage} />
-            <Route path="/tools" component={ToolsPage} />
-            <Route path="/customize" component={CustomizationPage} />
-            <Route path="/stacks" component={AccountStacksPage} />
-            <Route path="/fiverr" component={FiverrPage} />
-            <Route path="/jarvis" component={JarvisPage} />
-            <Route path="/app-generator" component={AppGeneratorPage} />
-            <Route path="/white-label" component={WhiteLabelPage} />
-            <Route path="/prop-trading" component={PropTradingPage} />
+            <Route path="/" component={() => <ErrorBoundary><Dashboard /></ErrorBoundary>} />
+            <Route path="/boss" component={() => <ErrorBoundary><BossPage /></ErrorBoundary>} />
+            <Route path="/workflows" component={() => <ErrorBoundary><WorkflowsPage /></ErrorBoundary>} />
+            <Route path="/workflows/:id" component={() => <ErrorBoundary><WorkflowDetailPage /></ErrorBoundary>} />
+            <Route path="/agents" component={() => <ErrorBoundary><AgentsPage /></ErrorBoundary>} />
+            <Route path="/agents/:id/chat" component={() => <ErrorBoundary><AgentChatPage /></ErrorBoundary>} />
+            <Route path="/audit" component={() => <ErrorBoundary><AuditPage /></ErrorBoundary>} />
+            <Route path="/pricing" component={() => <ErrorBoundary><PricingPage /></ErrorBoundary>} />
+            <Route path="/journal" component={() => <ErrorBoundary><TradingJournalPage /></ErrorBoundary>} />
+            <Route path="/bot-challenge" component={() => <ErrorBoundary><BotChallengePage /></ErrorBoundary>} />
+            <Route path="/settings" component={() => <ErrorBoundary><SettingsPage /></ErrorBoundary>} />
+            <Route path="/usage" component={() => <ErrorBoundary><TokenUsagePage /></ErrorBoundary>} />
+            <Route path="/admin" component={() => <ErrorBoundary><AdminPage /></ErrorBoundary>} />
+            <Route path="/marketplace" component={() => <ErrorBoundary><MarketplacePage /></ErrorBoundary>} />
+            <Route path="/marketplace/my" component={() => <ErrorBoundary><MyListingsPage /></ErrorBoundary>} />
+            <Route path="/marketplace/:id" component={() => <ErrorBoundary><MarketplaceDetailPage /></ErrorBoundary>} />
+            <Route path="/tools" component={() => <ErrorBoundary><ToolsPage /></ErrorBoundary>} />
+            <Route path="/customize" component={() => <ErrorBoundary><CustomizationPage /></ErrorBoundary>} />
+            <Route path="/stacks" component={() => <ErrorBoundary><AccountStacksPage /></ErrorBoundary>} />
+            <Route path="/fiverr" component={() => <ErrorBoundary><FiverrPage /></ErrorBoundary>} />
+            <Route path="/jarvis" component={() => <ErrorBoundary><JarvisPage /></ErrorBoundary>} />
+            <Route path="/app-generator" component={() => <ErrorBoundary><AppGeneratorPage /></ErrorBoundary>} />
+            <Route path="/white-label" component={() => <ErrorBoundary><WhiteLabelPage /></ErrorBoundary>} />
+            <Route path="/prop-trading" component={() => <ErrorBoundary><PropTradingPage /></ErrorBoundary>} />
             <Route component={NotFound} />
           </Switch>
-          </ErrorBoundary>
         </AppLayout>
       </Route>
     </Switch>

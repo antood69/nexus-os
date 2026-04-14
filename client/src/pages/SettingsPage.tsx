@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { useTheme } from "../contexts/ThemeContext";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { Sun, Moon, CreditCard, Coins, ArrowRight, Key, Plus, Trash2, CheckCircle, XCircle, TestTube, Loader2, Cpu, Globe } from "lucide-react";
+import { Sun, Moon, CreditCard, Coins, ArrowRight, Key, Plus, Trash2, CheckCircle, XCircle, TestTube, Loader2, Cpu, Globe, RotateCcw, Info } from "lucide-react";
 import { Link } from "wouter";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -54,6 +54,16 @@ export default function SettingsPage() {
       if (!res.ok) throw new Error("Failed");
       return res.json();
     },
+  });
+
+  const { data: healthData } = useQuery<{ version: string; uptime: string; status: string }>({
+    queryKey: ["health"],
+    queryFn: async () => {
+      const res = await fetch("/api/health");
+      if (!res.ok) throw new Error("Failed");
+      return res.json();
+    },
+    staleTime: 60000,
   });
 
   const { data: apiKeys = [] } = useQuery<UserApiKey[]>({
@@ -174,6 +184,31 @@ export default function SettingsPage() {
                   Dark
                 </button>
               </div>
+            </div>
+          </div>
+
+          {/* Onboarding */}
+          <div className="p-5">
+            <h2 className="text-sm font-semibold text-foreground mb-4">Onboarding</h2>
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-sm text-foreground">Product Tour</p>
+                <p className="text-xs text-muted-foreground mt-0.5">Replay the onboarding walkthrough</p>
+              </div>
+              <Button
+                variant="outline"
+                size="sm"
+                className="text-xs"
+                onClick={() => {
+                  localStorage.removeItem("bunz_tour_completed");
+                  localStorage.setItem("bunz_tour_replay", "1");
+                  window.location.hash = "#/";
+                  window.location.reload();
+                }}
+              >
+                <RotateCcw className="w-3 h-3 mr-1" />
+                Replay Tour
+              </Button>
             </div>
           </div>
 
@@ -440,6 +475,14 @@ export default function SettingsPage() {
           </div>
         </div>
       )}
+
+      {/* Version Footer */}
+      <div className="mt-8 pt-4 border-t border-border text-center">
+        <p className="text-[11px] text-muted-foreground flex items-center justify-center gap-1.5">
+          <Info className="w-3 h-3" />
+          Bunz {healthData?.version || "0.1.0-alpha"} · Status: {healthData?.status || "checking..."} · Uptime: {healthData?.uptime || "—"}
+        </p>
+      </div>
     </div>
   );
 }
